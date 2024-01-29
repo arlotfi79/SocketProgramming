@@ -2,6 +2,15 @@
 
 ## Description
 
+### How to Use the Makefile
+1. Compile the executables
+   * `make all`
+2. Running server & client
+   * `./remotecmds`
+   * `./remotecmdc`
+3. Cleaning unuseful files in the end
+   * `make clean`
+
 ### Files
 
 The folder contains several files serving different purposes:
