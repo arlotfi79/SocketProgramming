@@ -6,8 +6,8 @@
 1. Compile the executables
    * `make all`
 2. Running server & client
-   * `./remotecmds`
-   * `./remotecmdc`
+   * `./remotecmds.bin`
+   * `./remotecmdc.bin`
 3. Cleaning unuseful files in the end
    * `make clean`
 
