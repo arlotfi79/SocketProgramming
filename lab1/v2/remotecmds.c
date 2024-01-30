@@ -13,7 +13,7 @@ int main(void)
     int k, fd, status;
     char buf[MAX_COMMAND_LENGTH];
     char *args[MAX_ARG_LENGTH];
-    ssize_t bytes_read;
+    ssize_t bytes_read, total_bytes_read = 0;
 
     unlink(FIFO_NAME); // to be able to make new fifo each time
     if (mkfifo(FIFO_NAME, ACCESS_LEVEL) == -1) {
@@ -30,15 +30,37 @@ int main(void)
         }
 
         // Read command from FIFO
-        bytes_read = read(fd, buf, MAX_COMMAND_LENGTH);
-        if (bytes_read == -1) {
-            perror("Error reading from FIFO");
-            close(fd);
-            exit(EXIT_FAILURE);
+        total_bytes_read = 0; // Reset total bytes read for each iteration
+        while (total_bytes_read < MAX_COMMAND_LENGTH - 1)
+        {
+            // -1 is to keep space for the \0 which is going to be added
+            bytes_read = read(fd, buf + total_bytes_read, MAX_COMMAND_LENGTH - 1 - total_bytes_read);
+            if (bytes_read == -1)
+            {
+                perror("Error reading from FIFO");
+                close(fd);
+                exit(EXIT_FAILURE);
+            }
+
+            // No more data in FIFO
+            else if (bytes_read == 0)
+                break;
+
+            // update read bytes
+            total_bytes_read += bytes_read;
+
+            // Command complete
+            if (buf[total_bytes_read - 1] == '\n')
+                break;
         }
+
         close(fd);
 
-        buf[bytes_read] = '\0';
+        buf[total_bytes_read-1] = '\0';
+
+        // ignore if command exceeds max length
+        if (total_bytes_read > MAX_COMMAND_LENGTH)
+            continue;
 
         parse_command(buf, args);
 

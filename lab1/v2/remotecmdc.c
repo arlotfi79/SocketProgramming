@@ -29,7 +29,7 @@ int main() {
         len = strlen(input);
         if(len == 1) 				// case: only return key pressed
             continue;
-        input[len-1] = '\0';			// case: command entered
+        input[len-1] = '\n';		// case: command entered
 
         // Check if input exceeds maximum length
         if (strlen(input) > MAX_COMMAND_LENGTH) {
