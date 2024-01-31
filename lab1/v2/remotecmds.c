@@ -46,8 +46,10 @@ int main(void) {
 
         for (int i = 0; tokens[i] != NULL; i++) {
 
-            if (strlen(tokens[i]) > MAX_COMMAND_LENGTH)
+            if (strlen(tokens[i]) > MAX_COMMAND_LENGTH) {
+                printf("Error in server: Command exceeds maximum length\n");
                 continue;
+            }
 
             // Flush the array after usage using memset
             memset(args, '\0', sizeof(args));
