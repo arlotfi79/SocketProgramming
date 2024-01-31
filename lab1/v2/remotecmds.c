@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <sys/stat.h> // for making the FIFO
@@ -8,12 +9,11 @@
 #include "utils.h"
 #include "constants.h"
 
-int main(void)
-{
+int main(void) {
     int k, fd, status;
-    char buf[MAX_COMMAND_LENGTH];
-    char *args[MAX_ARG_LENGTH];
-    ssize_t bytes_read, total_bytes_read = 0;
+    char buf[MAX_ARRAY_LENGTH];
+    char *args[MAX_ARG_LENGTH], *tokens[MAX_ARG_LENGTH];
+    ssize_t total_bytes_read = 0;
 
     unlink(FIFO_NAME); // to be able to make new fifo each time
     if (mkfifo(FIFO_NAME, ACCESS_LEVEL) == -1) {
@@ -21,7 +21,10 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
-    while(1) {
+    while (1) {
+        total_bytes_read = 0;
+        // Flush the array after usage using memset
+        memset(buf, '\0',sizeof(buf));
 
         fd = open(FIFO_NAME, O_RDONLY); // O_RDONLY: open for read-only
         if (fd == -1) {
@@ -30,51 +33,40 @@ int main(void)
         }
 
         // Read command from FIFO
-        total_bytes_read = 0; // Reset total bytes read for each iteration
-        while (total_bytes_read < MAX_COMMAND_LENGTH - 1)
-        {
-            // -1 is to keep space for the \0 which is going to be added
-            bytes_read = read(fd, buf + total_bytes_read, MAX_COMMAND_LENGTH - 1 - total_bytes_read);
-            if (bytes_read == -1)
-            {
-                perror("Error reading from FIFO");
-                close(fd);
-                exit(EXIT_FAILURE);
-            }
-
-            // No more data in FIFO
-            else if (bytes_read == 0)
-                break;
-
-            // update read bytes
-            total_bytes_read += bytes_read;
-
-            // Command complete
-            if (buf[total_bytes_read - 1] == '\n')
-                break;
+        total_bytes_read = read(fd, buf, sizeof(buf));
+        if (total_bytes_read == -1) {
+            perror("Error reading from FIFO");
+            close(fd);
+            exit(EXIT_FAILURE);
         }
 
         close(fd);
 
-        buf[total_bytes_read-1] = '\0';
+        parse_command(buf, tokens, "\n");
 
-        // ignore if command exceeds max length
-        if (total_bytes_read > MAX_COMMAND_LENGTH)
-            continue;
+        for (int i = 0; tokens[i] != NULL; i++) {
 
-        parse_command(buf, args);
+            if (strlen(tokens[i]) > MAX_COMMAND_LENGTH)
+                continue;
 
-        k = fork();
-        if (k==0) {
-            // child code
-            if(execvp(args[0], args) == -1) {    // if execution failed, terminate child
-                perror("Error executing command");
-                exit(EXIT_FAILURE);
+            // Flush the array after usage using memset
+            memset(args, '\0', sizeof(args));
+
+            parse_command(tokens[i], args, " ");
+
+            k = fork();
+            if (k == 0) {
+                // child code
+                if (execvp(args[0], args) == -1) {    // if execution failed, terminate child
+                    perror("Error executing command");
+                    exit(EXIT_FAILURE);
+                }
             }
+            else
+                waitpid(k, &status, 0);        // block until child process terminates
         }
-        else {
-            // parent code
-            waitpid(k, &status, 0);		// block until child process terminates
-        }
+
+        // Flush the array after usage using memset
+        memset(tokens, '\0', sizeof(tokens));
     }
 }

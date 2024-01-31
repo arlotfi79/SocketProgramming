@@ -27,22 +27,25 @@ int main() {
         }
 
         len = strlen(input);
-        if(len == 1) 				// case: only return key pressed
+
+        // Check if input is empty (only return key pressed)
+        if (len == 1) {
             continue;
-        input[len-1] = '\n';		// case: command entered
+        }
 
         // Check if input exceeds maximum length
-        if (strlen(input) > MAX_COMMAND_LENGTH) {
+        if (len > MAX_COMMAND_LENGTH) {
             printf("Error: Command exceeds maximum length\n");
             continue;
         }
 
         // Write command to FIFO
-        bytes_written = write(fd, input, strlen(input));
+        bytes_written = write(fd, input, len);
         if (bytes_written == -1) {
             perror("Error writing to FIFO");
             close(fd);
             exit(EXIT_FAILURE);
         }
+
     }
 }
