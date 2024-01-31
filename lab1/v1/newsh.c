@@ -8,8 +8,7 @@
 #include "utils.h"
 
 
-int main(void)
-{
+int main(void) {
     int k;
     char buf[30];
     char *args[256];
@@ -21,7 +20,7 @@ int main(void)
         exit(1);
     }
 
-    while(1) {
+    while (1) {
 
         // Print formatted prompt
         printf("%s:%d %%>", hostname, getpid());
@@ -29,21 +28,20 @@ int main(void)
         // read command from stdin
         fgets(buf, 30, stdin);
         len = strlen(buf);
-        if(len == 1) 				// case: only return key pressed
+        if (len == 1)                // case: only return key pressed
             continue;
-        buf[len-1] = '\0';			// case: command entered
+        buf[len - 1] = '\0';            // case: command entered
 
-        parse_command(buf, args);
+        parse_command(buf, args, " ");
 
         k = fork();
-        if (k==0) {
+        if (k == 0) {
             // child code
-            if(execvp(args[0], args) == -1)	// if execution failed, terminate child
+            if (execvp(args[0], args) == -1)    // if execution failed, terminate child
                 exit(1);
-        }
-        else {
+        } else {
             // parent code
-            waitpid(k, &status, 0);		// block until child process terminates
+            waitpid(k, &status, 0);        // block until child process terminates
         }
     }
 }
