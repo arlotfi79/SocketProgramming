@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
 
     // packet prep
     int16_t send_sq_num = 7, recv_sq_num;
-    uint8_t send_command = 1, recv_command;
+    uint8_t send_command = 0, recv_command;
 
 
     if (argc < S_ARG_COUNT) {
@@ -77,10 +77,10 @@ int main(int argc, char *argv[]) {
 
     if (recv_sq_num == send_sq_num) {
         // Calculate time difference in milliseconds
-        long int time_diff_ms = (end_time.tv_sec - start_time.tv_sec) * 1000 +
-                                (end_time.tv_usec - start_time.tv_usec) / 1000;
+        double time_diff_ms = (double)((end_time.tv_sec - start_time.tv_sec) * 1000 +
+                                       (end_time.tv_usec - start_time.tv_usec) / 1000.0);
 
-        printf("Time difference: %ld milliseconds\n", time_diff_ms);
+        printf("RTT: %.3f milliseconds\n", time_diff_ms);
     } else
         printf("Sequence numbers do not match");
 
