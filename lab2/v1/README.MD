@@ -84,7 +84,3 @@ The provided Makefile automates the compilation process for the client and serve
     * `./pingc.bin 128.10.112.135 44453 128.10.112.140`
 3. Cleaning unuseful files in the end
     * `make clean`
-
----
-
-This README provides an overview of the files, functions, Makefile, and usage of the ping server-client application.

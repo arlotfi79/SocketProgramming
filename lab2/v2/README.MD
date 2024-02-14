@@ -66,10 +66,9 @@ The server program (`ssftpd.c`) listens for file transfer requests from clients 
 - **Calculating File Size (Server):**
 
 ```c
-// Calculate file size
-fseek(file, 0L, SEEK_END); // Move the file position indicator to the end of the file
-unsigned long file_size = ftell(file); // Returns the current value of the file position indicator
-rewind(file); // Reset the file position indicator to the beginning of the file
+fseek(file, 0L, SEEK_END); 
+unsigned long file_size = ftell(file); 
+rewind(file); 
 ```
 This code snippet calculates the size of the file by manipulating the file position indicator.
 
@@ -85,7 +84,3 @@ This code snippet calculates the size of the file by manipulating the file posit
     * `./ssftpd.bin 128.10.112.135 50010`
 3. Cleaning unuseful files in the end
     * `make clean`
-
----
-
-This README provides an overview of the files, functions, Makefile, and usage of the ping server-client application.
