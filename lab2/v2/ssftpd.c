@@ -2,12 +2,28 @@
 ** ssftpd.c -- a datagram sockets "server" for small size file transfer protocol
 */
 
-#include "message_utils.h"
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 #include "socket_utils.h"
 #include "constants.h"
 
+int create_file(char *file_path, int size);
+
 // arg[0] = command, arg[1] = ip, arg[2] = port
 int main(int argc, char *argv[]) {
+    // creating a sample file for checking
+    if (create_file("server_tmp/testfile", FILE_SIZE_BENCH) == -1) {
+        printf("Error creating file\n");
+        exit(EXIT_FAILURE);
+    }
+
+
     if (argc < S_ARG_COUNT) {
         fprintf(stderr, "Usage: %s <IPv4 address> <port number>\n", argv[0]);
         exit(EXIT_FAILURE);
@@ -103,17 +119,20 @@ int main(int argc, char *argv[]) {
 
 
         // Check if the requested file exists
-        FILE *file = fopen(filename, "rb");
+        char filepath[sizeof(SERVER_TEMP_DIR) + sizeof(filename)];
+        strcpy(filepath, SERVER_TEMP_DIR);
+        strcat(filepath, filename);
+        FILE *file = fopen(filepath, "rb");
         if (file == NULL) {
             fflush(stdout);
-            printf("ignoring request");
+            printf("ignoring request\n");
             fprintf(stderr, "File does not exist: %s\n", filename);
             continue;
         }
 
-        // Get file size
+        // Calculate file size
         fseek(file, 0L, SEEK_END); // move the file position indicator to the end of the file
-        long file_size = ftell(file); // returns the current value of the file position indicator
+        unsigned long file_size = ftell(file); // returns the current value of the file position indicator
         rewind(file); // reset the file position indicator to the beginning of the file
 
         // Read file content into memory
@@ -127,11 +146,12 @@ int main(int argc, char *argv[]) {
         fclose(file);
 
         // Send file size to client
-        char file_size_packet[SERVER_FIRST_PCK_SIZE];
+        unsigned char file_size_packet[SERVER_FIRST_PCK_SIZE];
         memset(file_size_packet, 0, sizeof(file_size_packet));
         file_size_packet[0] = (file_size >> 16) & 0xFF;
         file_size_packet[1] = (file_size >> 8) & 0xFF;
         file_size_packet[2] = file_size & 0xFF;
+
         if (sendto(sockfd, file_size_packet, SERVER_FIRST_PCK_SIZE, 0, (struct sockaddr *) &client_addr, addr_len) ==
             -1) {
             perror("sendto");
@@ -139,13 +159,21 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        printf("Server: file size sent to %s\n", inet_ntop(AF_INET,
+                                                           &(((struct sockaddr_in *) &client_addr)->sin_addr),
+                                                           s, sizeof s));
+
         // Send file content to client in chunks
         int sequence_number = 0;
         int bytes_sent = 0;
         while (bytes_sent < file_size) {
             int bytes_to_send = (file_size - bytes_sent > SERVER_MAX_PAYLOAD_SIZE) ? SERVER_MAX_PAYLOAD_SIZE : (
                     file_size - bytes_sent);
-            char buf[SERVER_MAX_PAYLOAD_SIZE + 1];
+            unsigned char buf[SERVER_MAX_PAYLOAD_SIZE + 1];
+
+            printf("Server: sending packet #%d to %s\n", sequence_number, inet_ntop(AF_INET,
+                                                                                    &(((struct sockaddr_in *) &client_addr)->sin_addr),
+                                                                                    s, sizeof s));
 
             buf[0] = sequence_number++;
             memcpy(buf + 1, file_content + bytes_sent, bytes_to_send);
@@ -155,9 +183,31 @@ int main(int argc, char *argv[]) {
                 free(file_content);
                 continue;
             }
+
             bytes_sent += bytes_to_send;
         }
 
+        printf("Server: Finished sending packet to %s\n", inet_ntop(AF_INET,
+                                                                    &(((struct sockaddr_in *) &client_addr)->sin_addr),
+                                                                    s, sizeof s));
+
         free(file_content);
     }
+}
+
+int create_file(char *file_path, int size) {
+    FILE *file = fopen(file_path, "wb");
+    if (file == NULL) {
+        perror("Error opening file");
+        return -1;
+    }
+
+    // Write 2560 bytes of data to the file
+    for (int i = 0; i < size; i++) {
+        fputc('A', file); // Write Anything
+    }
+
+    fclose(file);
+    printf("File created successfully.\n");
+    return 0;
 }

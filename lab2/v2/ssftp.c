@@ -2,7 +2,15 @@
 ** ssftp.c -- a datagram "client" for small size file transfer protocol
 */
 
-#include "message_utils.h"
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <sys/time.h>
+
 #include "socket_utils.h"
 #include "constants.h"
 
@@ -59,6 +67,10 @@ int main(int argc, char *argv[]) {
     signal(SIGALRM, handle_timeout); // Re-register signal handler
     ualarm(TIMEOUT, 0); // Set microsecond alarm
 
+    // Start time measurement
+    struct timeval start_time, end_time;
+    gettimeofday(&start_time, NULL);
+
     // Sending message
     if ((numbytes = sendto(sockfd, filename, MAX_FILENAME_LENGTH, 0, server_info->ai_addr, server_info->ai_addrlen)) ==
         -1) {
@@ -69,7 +81,7 @@ int main(int argc, char *argv[]) {
     printf("client: sent %d bytes to %s:%s\n", numbytes, server_ip, server_port);
 
     // Getting file size from server
-    char file_size_packet[SERVER_FIRST_PCK_SIZE];
+    unsigned char file_size_packet[SERVER_FIRST_PCK_SIZE];
     memset(file_size_packet, 0, sizeof(file_size_packet));
     if ((numbytes = recvfrom(sockfd, file_size_packet, SERVER_FIRST_PCK_SIZE, 0, NULL, NULL)) ==
         -1) { // Don't care about the address, No need for it when recv
@@ -79,21 +91,16 @@ int main(int argc, char *argv[]) {
     // Cancel the alarm as response received
     alarm(0);
 
-    // Start time measurement
-    struct timeval start_time, end_time;
-    gettimeofday(&start_time, NULL);
-
-
     if (numbytes != 3) {
-        fprintf(stderr, "Invalid file size received.\n");
+        fprintf(stderr, "Invalid number of bytes received.\n");
         close(sockfd);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // creating the file_size from the packet received
-    int file_size = (file_size_packet[0] << 16) | (file_size_packet[1] << 8) | file_size_packet[2];
+    unsigned long file_size = (file_size_packet[0] << 16) | (file_size_packet[1] << 8) | file_size_packet[2];
 
-    if (file_size < 0 || file_size > MAX_FILE_SIZE) {
+    if (file_size > MAX_FILE_SIZE) {
         fprintf(stderr, "Invalid file size received.\n");
         close(sockfd);
         exit(EXIT_FAILURE);
@@ -101,7 +108,6 @@ int main(int argc, char *argv[]) {
 
     // Getting the file content from server
     int payload_size = atoi(argv[5]), total_bytes_received = 0;
-    int expected_sequence_number = 0;
 
     char *file_content = (char *) malloc(file_size);
     if (file_content == NULL) {
@@ -111,7 +117,7 @@ int main(int argc, char *argv[]) {
     }
     memset(file_content, 0, file_size);
 
-    char buf[payload_size + 1];
+    unsigned char buf[payload_size + 1];
     memset(buf, 0, sizeof(buf));
 
     while (total_bytes_received < file_size) {
@@ -124,27 +130,26 @@ int main(int argc, char *argv[]) {
         // Extract sequence number from the first byte of the buffer
         int sequence_number = buf[0];
 
-        // Check if received packet is in sequence
-        if (sequence_number != expected_sequence_number) {
-            fprintf(stderr, "Received out-of-sequence packet. Expected sequence number: %d, Received: %d\n",
-                    expected_sequence_number, sequence_number);
-            close(sockfd);
-            free(file_content);
-            exit(EXIT_FAILURE);
-        }
-
-
         // Copy file content (excluding sequence number) to file_content array
-        memcpy(file_content + sequence_number * payload_size, buf + 1, numbytes - 1);
+        memcpy(file_content + sequence_number * payload_size, buf + 1, numbytes - 1); // handles the pck if not even inorder
         total_bytes_received += numbytes - 1;
-        expected_sequence_number++;
     }
 
     // End time measurement
     gettimeofday(&end_time, NULL);
 
     // Save file content to disk
-    FILE *file = fopen("/tmp/outputfile", "wb");
+    // Remove padding characters ('Z') from the filename
+    int original_filename_length = strnlen(filename, MAX_FILENAME_LENGTH + 1);
+    while (original_filename_length > 0 && filename[original_filename_length - 1] == 'Z') {
+        filename[--original_filename_length] = '\0';
+    }
+
+    char filepath[sizeof(CLIENT_TEMP_DIR) + sizeof(filename)];
+    strcpy(filepath, CLIENT_TEMP_DIR);
+    strcat(filepath, filename);
+
+    FILE *file = fopen(filepath, "wb");
     if (file == NULL) {
         perror("fopen");
         close(sockfd);
@@ -164,7 +169,7 @@ int main(int argc, char *argv[]) {
 
 
     // Calculate completion time in milliseconds
-    long completion_time_ms =
+    double completion_time_ms =
             (end_time.tv_sec - start_time.tv_sec) * 1000 + (end_time.tv_usec - start_time.tv_usec) / 1000;
 
     // Calculate transfer speed in bits per second
@@ -172,7 +177,7 @@ int main(int argc, char *argv[]) {
 
     // Calculate percentage of bytes not received
     double percentage_missing = ((double) (file_size - total_bytes_received) / (double) file_size) * 100;
-    printf("Completion time: %ld milliseconds\n", completion_time_ms);
+    printf("Completion time: %f milliseconds\n", completion_time_ms);
     printf("Transfer speed: %.2f bps\n", transfer_speed_bps);
     printf("Percentage of bytes not received: %.2f%%\n", percentage_missing);
 

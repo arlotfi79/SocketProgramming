@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <netdb.h>
 #include "socket_utils.h"
 
@@ -44,8 +43,8 @@ int create_socket(const struct addrinfo *const info) {
         }
 
         // avoiding the "Address already in use" error message
-        int yes=1;
-        if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes) == -1) {
+        int yes = 1;
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
             perror("setsockopt");
             exit(EXIT_FAILURE);
         }
@@ -80,3 +79,4 @@ int bind_socket(const struct addrinfo *const info, const int sockfd) {
     }
     return 0;
 }
+
