@@ -80,9 +80,9 @@ This code snippet calculates the size of the file by manipulating the file posit
 ### How to Use the Makefile
 1. Compile the executables
     * `make all`
-2. Running server & client (Used my IP at the time of testing here)
-    * `./ssftp.bin testfile 128.10.112.135 50001 128.10.112.133 1000`
-    * `./ssftpd.bin 128.10.112.135 50001`
+2. Running server & client (used amber10 as client and amber05 as server)
+    * `./ssftp.bin testfile 128.10.112.135 50019 128.10.112.140 1000`
+    * `./ssftpd.bin 128.10.112.135 50010`
 3. Cleaning unuseful files in the end
     * `make clean`
 

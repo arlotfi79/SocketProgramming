@@ -79,9 +79,9 @@ The provided Makefile automates the compilation process for the client and serve
 ### How to Use the Makefile
 1. Compile the executables
     * `make all`
-2. Running server & client (Used my IP at the time of testing here)
+2. Running server & client (used amber10 as client and amber05 as server)
     * `./pings.bin 128.10.112.135 44444`
-    * `./pingc.bin 128.10.112.135 44453 172.16.36.165`
+    * `./pingc.bin 128.10.112.135 44453 128.10.112.140`
 3. Cleaning unuseful files in the end
     * `make clean`
 
