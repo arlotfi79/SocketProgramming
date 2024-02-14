@@ -1,87 +1,88 @@
-# Ping Server-Client Application
+### Small Size File Transfer Protocol (SSFTP)
 
-This is a simple client-server application for sending and receiving ping messages over UDP.
+---
 
-## Files and Functions
+#### Introduction
 
-### pings.c
+This repository contains a simple implementation of a small size file transfer protocol (SSFTP) using datagram sockets in C. The protocol allows clients to request files from a server, which then sends the requested file in chunks to the client.
 
-#### `int main(int argc, char *argv[])`
-- **Description**: Main function of the server program.
-- **Parameters**:
-    - `argc`: Number of command-line arguments.
-    - `argv[]`: Array of command-line arguments.
-- **Role**:
-    - Initializes server socket and binds it to a port.
-    - Listens for incoming ping requests.
-    - Responds to the ping requests based on the command received.
+---
 
-### pingc.c
+#### Client (ssftp.c)
 
-#### `int main(int argc, char *argv[])`
-- **Description**: Main function of the client program.
-- **Parameters**:
-    - `argc`: Number of command-line arguments.
-    - `argv[]`: Array of command-line arguments.
-- **Role**:
-    - Initializes client socket and binds it to a port.
-    - Sends a ping request to the server.
-    - Receives the response from the server and calculates the round-trip time.
+The client program (`ssftp.c`) initiates file transfer requests to the server. It takes command-line arguments for the filename, server IP, server port, client IP, and payload size.
 
-### message_utils.c
+##### How it Works
 
-#### `void encode_packet(uint8_t *buffer, const int16_t *sequence_number, const uint8_t *command)`
-- **Description**: Encodes ping packet with sequence number and command.
-- **Parameters**:
-    - `buffer`: Buffer to store the encoded packet.
-    - `sequence_number`: Pointer to the sequence number.
-    - `command`: Pointer to the command.
-- **Role**: Encodes the sequence number and command into the buffer.
+- **Preparing Filename:** The filename is prepared and padded with 'Z' characters if necessary to match a fixed length.
 
-#### `void decode_packet(const uint8_t *buffer, int16_t *sequence_number, uint8_t *command)`
-- **Description**: Decodes ping packet to extract sequence number and command.
-- **Parameters**:
-    - `buffer`: Buffer containing the encoded packet.
-    - `sequence_number`: Pointer to store the sequence number.
-    - `command`: Pointer to store the command.
-- **Role**: Decodes the sequence number and command from the buffer.
+- **Creating Socket:** A socket is created and bound for communication with the server.
 
-### socket_utils.c
+- **Timeout Mechanism:** A timeout mechanism is set up to handle potential packet loss during transmission.
 
-#### `int build_address(const char *const ip, const char *const port, struct addrinfo **info)`
-- **Description**: Builds a socket address structure using the provided IP address and port.
-- **Parameters**:
-    - `ip`: IP address in string format.
-    - `port`: Port number in string format.
-    - `info`: Pointer to store the address information.
-- **Return Value**: Returns an integer representing the status of the operation (0 for success, non-zero for failure).
-- **Role**: Converts the IP address and port into a socket address structure and stores the information in the `info` pointer.
+- **Sending Request:** The client sends a request to the server for the specified file.
 
-#### `int create_socket(const struct addrinfo *const info)`
-- **Description**: Creates a socket using the provided address information.
-- **Parameters**:
-    - `info`: Address information.
-- **Return Value**: Returns the socket file descriptor on success, or -1 on failure.
-- **Role**: Creates a socket based on the provided address information (such as IP version and socket type).
+- **Receiving File Size:** The client receives the file size from the server and validates it.
 
-#### `int bind_socket(const struct addrinfo *const info, const int sockfd)`
-- **Description**: Binds a socket to the provided address information.
-- **Parameters**:
-    - `info`: Address information.
-    - `sockfd`: Socket file descriptor.
-- **Return Value**: Returns 0 on success, or -1 on failure.
-- **Role**: Binds the socket to the address information obtained from `build_address`. This step is necessary before using the socket to send or receive data.
+- **Receiving File Content:** The client receives the file content in chunks from the server and reconstructs the file.
 
-## Makefile
+##### Additional Explanation
 
-The provided Makefile automates the compilation process for the client and server programs along with their dependencies. 
+- **Removing Padding Characters from Filename:**
+
+```c
+int original_filename_length = strnlen(filename, MAX_FILENAME_LENGTH + 1);
+while (original_filename_length > 0 && filename[original_filename_length - 1] == 'Z') {
+    filename[--original_filename_length] = '\0';
+}
+```
+- **Handling Out-of-Order Packets:**
+```c
+memcpy(file_content + sequence_number * payload_size, buf + 1, numbytes - 1);
+```
+The starting position within the buffer is calculated based on the sequence number of the 
+packet (sequence_number) and the payload size (payload_size). By using this calculation, 
+the code accommodates packets that may arrive out of order and ensures that the file 
+content is correctly reconstructed even in such scenarios.
+
+#### Server (ssftpd.c)
+
+The server program (`ssftpd.c`) listens for file transfer requests from clients and responds by sending the requested files. It takes command-line arguments for the server IP and port.
+
+##### How it Works
+
+- **Creating Sample File:** A sample file is created for testing purposes.
+
+- **Binding Socket:** The socket is bound to the specified port, with retries if necessary.
+
+- **Handling Requests:** The server waits for incoming requests, receives the filename, and checks if the file exists.
+
+- **Sending File Size:** The server sends the file size to the client and sends the file content in chunks.
+
+- **Continued Listening:** The server continues listening for new requests in an infinite loop.
+
+##### Additional Explanation
+
+- **Calculating File Size (Server):**
+
+```c
+// Calculate file size
+fseek(file, 0L, SEEK_END); // Move the file position indicator to the end of the file
+unsigned long file_size = ftell(file); // Returns the current value of the file position indicator
+rewind(file); // Reset the file position indicator to the beginning of the file
+```
+This code snippet calculates the size of the file by manipulating the file position indicator.
+
+- `fseek(file, 0L, SEEK_END);` moves the indicator to the end of the file.
+- `ftell(file);` returns the current position of the indicator, which represents the file size.
+- `rewind(file);` resets the indicator to the beginning of the file for further operations.
 
 ### How to Use the Makefile
 1. Compile the executables
     * `make all`
 2. Running server & client (Used my IP at the time of testing here)
-    * `./pings.bin 128.10.112.135 44444`
-    * `./pingc.bin 128.10.112.135 44453 172.16.36.165`
+    * `./ssftp.bin testfile 128.10.112.135 50001 128.10.112.133 1000`
+    * `./ssftpd.bin 128.10.112.135 50001`
 3. Cleaning unuseful files in the end
     * `make clean`
 
