@@ -3,15 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/wait.h>
-#include <sys/stat.h> // for making the FIFO
-#include <fcntl.h> // to use the read, open, ...
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <netdb.h>
-#include <unistd.h>
-#include <signal.h>
 #include <arpa/inet.h>
 
 #include "utils.h"
