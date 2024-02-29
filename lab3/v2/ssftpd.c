@@ -234,13 +234,6 @@ int main(int argc, char *argv[]) {
                 buf[0] = sequence_number++;
                 memcpy(buf + 1, file_content + bytes_sent, bytes_to_send);
 
-                // TODO: testing
-                if (buf[0] == 9 || buf[0] == 10 || buf[0] == 11) {
-                    printf("didn't send packet#%d\n", buf[0]);
-                    bytes_sent += bytes_to_send;
-                    continue;
-                }
-
                 printf("Server: sending packet #%d to %s\n", buf[0], inet_ntop(AF_INET,
                                                                                &(((struct sockaddr_in *) &client_addr)->sin_addr),
                                                                                s, sizeof s));

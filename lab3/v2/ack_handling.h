@@ -4,7 +4,7 @@
 #include <signal.h>
 
 #define MAX_SEQ_NUM 255
-#define RETRANSMIT_TIMEOUT 100 // 100 milliseconds in microseconds
+#define RETRANSMIT_TIMEOUT 100000 // 100 milliseconds in microseconds
 #define NOT_RECEIVED 0
 #define RECEIVED 1
 
