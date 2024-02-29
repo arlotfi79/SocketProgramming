@@ -1,0 +1,115 @@
+% ./ssftpd.bin 127.0.0.1 50001
+File created successfully.
+Server: successfully bound to port 50010
+Server: waiting to recvfrom...
+Server: got a 10 bytes packet from 127.0.0.1
+Server: file size sent to 127.0.0.1
+Server: sending packet #0 to 127.0.0.1
+Server: sending packet #1 to 127.0.0.1
+Server: sending packet #2 to 127.0.0.1
+Server: sending packet #3 to 127.0.0.1
+Server: sending packet #4 to 127.0.0.1
+Server: sending packet #5 to 127.0.0.1
+Server: sending packet #6 to 127.0.0.1
+Server: sending packet #7 to 127.0.0.1
+Server: sending packet #8 to 127.0.0.1
+didn't send packet#9
+didn't send packet#10
+didn't send packet#11
+Server: sending packet #12 to 127.0.0.1
+Server: sending packet #13 to 127.0.0.1
+Server: sending packet #14 to 127.0.0.1
+Server: sending packet #15 to 127.0.0.1
+Server: sending packet #16 to 127.0.0.1
+Server: sending packet #17 to 127.0.0.1
+Server: sending packet #18 to 127.0.0.1
+Server: sending packet #19 to 127.0.0.1
+Server: sending packet #20 to 127.0.0.1
+Server: sending packet #21 to 127.0.0.1
+Server: sending packet #22 to 127.0.0.1
+Server: sending packet #23 to 127.0.0.1
+Server: sending packet #24 to 127.0.0.1
+Server: sending packet #25 to 127.0.0.1
+waiting for 2 seconds after sending the last packet
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{9}...
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{10}...
+---- ALARM ACTIVATED ----
+---- ALARM ACTIVATED ----
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{10}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+Received retransmit request! Resending packet #{9}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+Received retransmit request! Resending packet #{11}...
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{11}...
+---- ALARM ACTIVATED ----
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{10}...
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{11}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+Received retransmit request! Resending packet #{9}...
+---- ALARM ACTIVATED ----
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{10}...
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{11}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+Received retransmit request! Resending packet #{9}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{9}...
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{10}...
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{11}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{9}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{10}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{11}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{9}...
+---- ALARM ACTIVATED ----
+Received retransmit request! Resending packet #{10}...
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+---- ALARM RESET ----
+waiting for 2 seconds after responding to the last nack request
+changed transmit_mode to 0
+Server: Finished sending packet to 127.0.0.1

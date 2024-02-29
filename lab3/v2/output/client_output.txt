@@ -1,0 +1,97 @@
+% ./ssftp.bin testfile 127.0.0.1 50010 127.0.0.1 1000
+client: sent 10 bytes to 127.0.0.1:50010
+mark: Received packet#0
+mark: Received packet#1
+mark: Received packet#2
+mark: Received packet#3
+mark: Received packet#4
+mark: Received packet#5
+mark: Received packet#6
+mark: Received packet#7
+mark: Received packet#8
+mark: Received packet#12
+mark: Received packet#13
+mark: Received packet#14
+mark: Received packet#15
+mark: Received packet#16
+mark: Received packet#17
+mark: Received packet#18
+mark: Received packet#19
+---- ALARM ACTIVATED ----
+seqmin: 9, seqmax: 20
+packet#{9} is lost! Retransmission request sent to 127.0.0.1
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#20
+---- ALARM ACTIVATED ----
+seqmin: 9, seqmax: 21
+packet#{9} is lost! Retransmission request sent to 127.0.0.1
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#21
+---- ALARM ACTIVATED ----
+seqmin: 9, seqmax: 22
+packet#{9} is lost! Retransmission request sent to 127.0.0.1
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#22
+---- ALARM ACTIVATED ----
+seqmin: 9, seqmax: 23
+packet#{9} is lost! Retransmission request sent to 127.0.0.1
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#23
+---- ALARM ACTIVATED ----
+seqmin: 9, seqmax: 24
+packet#{9} is lost! Retransmission request sent to 127.0.0.1
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#24
+---- ALARM ACTIVATED ----
+seqmin: 9, seqmax: 25
+packet#{9} is lost! Retransmission request sent to 127.0.0.1
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#25
+---- ALARM ACTIVATED ----
+seqmin: 9, seqmax: 26
+packet#{9} is lost! Retransmission request sent to 127.0.0.1
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#9
+---- ALARM ACTIVATED ----
+seqmin: 10, seqmax: 26
+packet#{10} is lost! Retransmission request sent to 127.0.0.1
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#10
+---- ALARM ACTIVATED ----
+seqmin: 11, seqmax: 26
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#10
+---- ALARM ACTIVATED ----
+seqmin: 11, seqmax: 26
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#9
+---- ALARM ACTIVATED ----
+seqmin: 11, seqmax: 26
+packet#{11} is lost! Retransmission request sent to 127.0.0.1
+---- ALARM RESET ----
+mark: Received packet#11
+---- ALARM ACTIVATED ----
+seqmin: 12, seqmax: 26
+---- ALARM RESET ----
+File transfer complete.
+-------------- RESULTS --------------
+Completion time: 0.000000 milliseconds
+Transfer speed: inf bps
+Percentage of bytes not received: 0.00%
