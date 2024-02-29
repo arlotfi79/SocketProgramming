@@ -96,7 +96,9 @@ int set_non_blocking(int sockfd) {
         perror("fcntl F_GETFL");
         return -1;
     }
-    if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK | O_ASYNC) == -1) {
+
+    flags |= O_NONBLOCK | O_ASYNC;
+    if (fcntl(sockfd, F_SETFL, flags) == -1) {
         perror("fcntl F_SETFL");
         return -1;
     }
