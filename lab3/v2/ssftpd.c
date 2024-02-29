@@ -21,6 +21,7 @@
 int sockfd;
 char *file_content;
 unsigned char buf[SERVER_MAX_PAYLOAD_SIZE + 1];
+volatile int transmit_mode = 1;
 
 int create_file(char *file_path, int size);
 
@@ -98,7 +99,7 @@ int main(int argc, char *argv[]) {
 
     } while (++attempts < MAX_ATTEMPTS);
 
-    if (set_non_blocking(sockfd, 0) < 0) {
+    if (set_non_blocking(sockfd) < 0) {
         perror("server: nonblocking");
         exit(EXIT_FAILURE);
     }
@@ -107,48 +108,57 @@ int main(int argc, char *argv[]) {
     freeaddrinfo(servinfo);
 
     int owner_pid = fcntl(sockfd, F_GETOWN);
+    int owner_flags = fcntl(sockfd, F_GETFL);
 
 
-//    // --- alarm for nack ---
-//    struct sigaction nack;
-//    memset(&nack, 0, sizeof(nack));
-//    nack.sa_handler = nack_handler;
-//    if (sigaction(SIGALRM, &nack, NULL) == -1) {
-//        perror("Failed to set up SIGALRM handler");
-//        return EXIT_FAILURE;
-//    }
-//    // --- alarm for nack ---
+    // --- alarm for nack ---
+    struct sigaction nack;
+    memset(&nack, 0, sizeof(nack));
+    nack.sa_handler = nack_handler;
+    if (sigaction(SIGALRM, &nack, NULL) == -1) {
+        perror("Failed to set up SIGALRM handler");
+        return EXIT_FAILURE;
+    }
+    // --- alarm for nack ---
 
     printf("Server: waiting to recvfrom...\n");
     while (1) {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = SIG_DFL; // Reset to default action
+        sa.sa_flags = 0;
+        if (sigaction(SIGIO, &sa, NULL) == -1) {
+            perror("Failed to reset SIGIO handler");
+            exit(EXIT_FAILURE);
+        }
+
         char filename[MAX_FILENAME_LENGTH + 1]; // +1 for null terminator
         memset(filename, '\0', sizeof(filename));
 
         addr_len = sizeof client_addr;
         if ((numbytes = recvfrom(sockfd, filename, MAX_FILENAME_LENGTH, 0, (struct sockaddr *) &client_addr,
                                  &addr_len)) == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
                 // No data available, retry or perform other tasks
                 continue;
             } else {
-                perror("recvfrom");
+                perror("recvfrom filename");
                 close(sockfd);
                 exit(EXIT_FAILURE);
             }
         }
 
         // --- alarm for retransmit ---
-        struct sigaction sa;
         memset(&sa, 0, sizeof(sa));
         sa.sa_handler = sigpoll_handler;
-        sa.sa_flags = SA_NODEFER; // non-blocking
+        sa.sa_flags = SA_RESTART | SA_NODEFER; // non-blocking
         if (sigaction(SIGIO, &sa, NULL) == -1) {
             perror("Failed to set up SIGALRM handler");
             return EXIT_FAILURE;
         }
         // --- alarm for retransmit ---
 
-        if (numbytes == 0)
+        if (numbytes == 0 || numbytes == 1)
             continue;
 
         filename[MAX_FILENAME_LENGTH] = '\0'; // Ensure null terminator
@@ -201,7 +211,7 @@ int main(int argc, char *argv[]) {
         if (sendto(sockfd, file_size_packet, SERVER_FIRST_PCK_SIZE, 0, (struct sockaddr *) &client_addr,
                    addr_len) ==
             -1) {
-            perror("sendto");
+            perror("sendto filesize");
             free(file_content);
             continue;
         }
@@ -212,34 +222,41 @@ int main(int argc, char *argv[]) {
 
         // Send file content to client in chunks
         int sequence_number = 0, bytes_sent = 0;
+        transmit_mode = 1;
 
-        while (bytes_sent < file_size) {
-            int bytes_to_send = (file_size - bytes_sent > SERVER_MAX_PAYLOAD_SIZE) ? SERVER_MAX_PAYLOAD_SIZE : (
-                    file_size - bytes_sent);
+        while (transmit_mode) {
+            while (bytes_sent < file_size) {
+                int bytes_to_send = (file_size - bytes_sent > SERVER_MAX_PAYLOAD_SIZE) ? SERVER_MAX_PAYLOAD_SIZE : (
+                        file_size - bytes_sent);
 
-            memset(buf, '\0', sizeof buf);
+                memset(buf, '\0', sizeof buf);
 
-            buf[0] = sequence_number++;
-            memcpy(buf + 1, file_content + bytes_sent, bytes_to_send);
+                buf[0] = sequence_number++;
+                memcpy(buf + 1, file_content + bytes_sent, bytes_to_send);
 
-            // TODO: testing
-            if (buf[0] == 9 || buf[0] == 10 || buf[0] == 11) {
-                printf("didn't send packet#%d\n", buf[0]);
+                // TODO: testing
+                if (buf[0] == 9 || buf[0] == 10 || buf[0] == 11) {
+                    printf("didn't send packet#%d\n", buf[0]);
+                    bytes_sent += bytes_to_send;
+                    continue;
+                }
+
+                printf("Server: sending packet #%d to %s\n", buf[0], inet_ntop(AF_INET,
+                                                                               &(((struct sockaddr_in *) &client_addr)->sin_addr),
+                                                                               s, sizeof s));
+                if (sendto(sockfd, buf, bytes_to_send + 1, 0, (struct sockaddr *) &client_addr, addr_len) == -1) {
+                    perror("sendto packets");
+                    continue;
+                }
+
                 bytes_sent += bytes_to_send;
-                continue;
+
+                if (bytes_sent >= file_size) {
+                    printf("waiting for 2 seconds after sending the last packet\n");
+                    alarm(2);
+                }
+
             }
-
-            printf("Server: sending packet #%d to %s\n", buf[0], inet_ntop(AF_INET,
-                                                                           &(((struct sockaddr_in *) &client_addr)->sin_addr),
-                                                                           s, sizeof s));
-            if (sendto(sockfd, buf, bytes_to_send + 1, 0, (struct sockaddr *) &client_addr, addr_len) == -1) {
-                perror("sendto");
-                free(file_content);
-                continue;
-            }
-
-            bytes_sent += bytes_to_send;
-
         }
 
 
@@ -247,17 +264,13 @@ int main(int argc, char *argv[]) {
                                                                     &(((struct sockaddr_in *) &client_addr)->sin_addr),
                                                                     s, sizeof s));
 
-        // Reset signal handler after specific operations
-        memset(&sa, 0, sizeof(sa));
-        sa.sa_handler = SIG_DFL; // Reset to default action
-        sa.sa_flags = 0;
-        if (sigaction(SIGIO, &sa, NULL) == -1) {
-            perror("Failed to reset SIGIO handler");
+        // Set the process ID to receive SIGIO signals for this socket
+        if (fcntl(sockfd, F_SETOWN, owner_pid) == -1) {
+            perror("fcntl F_SETOWN");
             exit(EXIT_FAILURE);
         }
-
-        if (set_non_blocking(sockfd, owner_pid) < 0) {
-            perror("server: nonblocking");
+        if (fcntl(sockfd, F_SETFL, owner_flags) == -1) {
+            perror("fcntl F_SETFL");
             exit(EXIT_FAILURE);
         }
 
@@ -314,4 +327,13 @@ void sigpoll_handler(int signum) {
     }
 
     printf("---- ALARM RESET ----\n");
+    printf("waiting for 2 seconds after responding to the last nack request\n");
+    alarm(2);
+}
+
+void nack_handler(int signum) {
+    if (signum == SIGALRM) {
+    transmit_mode = 0;
+    printf("changed transmit_mode to 0\n");
+    }
 }

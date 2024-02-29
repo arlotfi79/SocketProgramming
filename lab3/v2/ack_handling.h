@@ -16,7 +16,7 @@ typedef struct {
 
 
 extern volatile sig_atomic_t alarm_flag; // Declare alarm_flag variable
-extern volatile int transit_mode;
+extern volatile int transmit_mode;
 
 void alarm_handler(int signum);
 

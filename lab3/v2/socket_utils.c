@@ -82,7 +82,7 @@ int bind_socket(const struct addrinfo *const info, const int sockfd) {
     return 0;
 }
 
-int set_non_blocking(int sockfd, int owner_pid) {
+int set_non_blocking(int sockfd) {
 
     // Set the process ID to receive SIGIO signals for this socket
     if (fcntl(sockfd, F_SETOWN, getpid()) == -1) {
@@ -91,12 +91,12 @@ int set_non_blocking(int sockfd, int owner_pid) {
     }
 
     // Enable asynchronous I/O mode for the socket
-    int flags = fcntl(sockfd, F_GETFL, owner_pid);
+    int flags = fcntl(sockfd, F_GETFL, 0);
     if (flags == -1) {
         perror("fcntl F_GETFL");
         return -1;
     }
-    if (fcntl(sockfd, F_SETFL, flags | O_ASYNC) == -1) {
+    if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK | O_ASYNC) == -1) {
         perror("fcntl F_SETFL");
         return -1;
     }

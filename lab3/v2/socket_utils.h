@@ -7,6 +7,6 @@ void handle_timeout(int signum);
 int build_address(const char *const ip, const char *const port, struct addrinfo **info);
 int create_socket(const struct addrinfo *const info);
 int bind_socket(const struct addrinfo *const info, const int sockfd);
-int set_non_blocking(int sockfd, int owner_pid);
+int set_non_blocking(int sockfd);
 
 #endif //SOCKET_UTILS_H
