@@ -1,0 +1,27 @@
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+
+#define ERROR -1
+#define ALLOW 1
+#define DISALLOW 0
+
+#define SOURCE_IP_PREFIX "128.10.112"
+
+#define MAX_COMMAND_LENGTH 30
+#define MAX_ARRAY_LENGTH 128
+#define MAX_ARG_LENGTH 128
+
+
+#define MAX_COMMAND_ARG_LENGTH 2
+#define MAX_COMMAND_ARGS 3
+
+#define C_ARG_COUNT 4
+#define S_ARG_COUNT 3
+#define MAX_BUFFER_SIZE 50
+#define MAX_PORT_NUM 6
+#define MAX_ATTEMPTS 10
+#define MAX_CLIENTS 5
+
+#define TIMEOUT 500000 // 0.5 sec
+
+#endif
