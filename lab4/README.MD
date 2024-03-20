@@ -1,0 +1,129 @@
+<p align="center"><strong>CS 536 Spring 2024</strong></p>
+<p align="center"><strong>Lab 4: IPv6 internetworking and Link-local Addresses, Packet Forwarding and Tunneling [220 pts]</strong></p>
+
+
+## Problem 1 [60 pts]
+We will re-implement the UDP ping client/server app of lab2, Problem 1, so that the IPv6 address assigned to interface eth0 on a lab machine is to used identify the source and destination IP addresses of client and server in place of IPv4.
+
+### 1.1 IPv6 link-local vs. global addresses
+A new feature of IPv6 compared to IPv4 is that every network interface is assigned a local IPv6 address that is not routable, and possibly a global IPv6 address that is routable. That is, routers on the global Internet forward IPv6 packets containing the global IPv6 address as destination address. Local IPv6 addresses, called link-local, on the other hand, are discarded. From a forwarding perspective, link-local IPv6 addresses are similar to private IPv4 addresses (e.g., 192.168.0.0/16) that are meaningful within the boundary of a private IP network.
+
+The Ethernet interface, eth0, of a lab machine is configured with a link-local IPv6 address. It does not have a global IPv6 address, hence an amber machine is not reachable from the Internet using an IPv6 destination address. However, amber machines can communicate with each other by using their link-local IPv6 addresses. A complication arises because IPv6 has been endowed with zone or scope identifiers that must be correctly handled to implement network software that use IPv6. It is not as simple as replaceing 32-bit IPv4 addresses by 128-bit IPv6 addresses.
+
+A key role that a scope identifier associated with a IPv6 address plays is to identify the network interface of a multi-homed device such as a host or router. The need to specify a particular network interface --- e.g., a device may have two Ethernet interfaces, eth0 or eth1 --- exists in IPv4 which is handled by assigning a different IPv4 address to each interface. In IPv6 explicit accommodation is made for the possibility of configuring the interfaces of a multi-homed device with the same link-local IPv6 address and distinguishing them using a separate scope identifier. In this case, the scope identifier plays the role of network interface number. This feature would not be relevant but for IPv6 socket programming possessing dependence on the scope identifier, a field of the sockaddr_in6 data structure, that must be correctly handled to implement network software.
+
+### 1.2 IPv6 socket structure
+The four relevant fields of struct sockaddr_in6 are: sin6_family, sin6_port, sin6_addr, sin6_scope_id. sin6_family is set to AF_INET6 (or PF_INET6), sin6_port is the port number, sin6_addr the 128-bit IPv6 address, sin6_scope_id an unsigned integer. A fifth field, sin6_flowinfo, can be ignored. When re-implementing the UDP ping client/server app, the client must fill in the four fields with correct values before calling bind() so that the desired interface (in our case eth0) is selected to communicate IPv6 packets. The same goes for the server.
+
+For example, suppose amber05 runs the client, pingc, and amber06 executes the server, pings. Running "ifconfig -a" on the two machines shows that eth0 is configured with link-local IPv6 address
+
+inet6 fe80::a6bb:6dff:fe44:fc43 prefixlen 64 scopeid 0x20
+
+at amber05 and
+
+inet6 fe80::a6bb:6dff:fe44:ddb8 prefixlen 64 scopeid 0x20
+
+at amber06. In the case of the client machine amber05, the colon-hexadecimal notation fe80::a6bb:6dff:fe44:fc43 is shorthand for fe80:0000:0000:0000:a6bb:6dff:fe44:fc43, and prefixlen 64 specifies that the most significant 64 bits (i.e., prefix) of fe80::a6bb:6dff:fe44:fc43, in CIDR notation, fe80::a6bb:6dff:fe44:fc43/64 are used to identify an interface using the IPv6 address. Note that the 64-bit prefixes of amber05 and amber06 are the same. Since the least significant 16-bits, fc43 for amber05 and ddb8 for amber06 are different, the two interfaces belonging to two different hosts can be distinguished. If amber05 were to possess additional Ethernet interfaces, say, eth1 and eth2, then IPv6 allows eth1 and eth2 to be assigned the same IPv6 address as eth0, fe80::a6bb:6dff:fe44:fc43, but distinguished by assigning different scope identifiers. Even though we do not utilize this feature, IPv6 socket programming requires us to correctly configure the socket structure where scope identifier dependence is baked in.
+
+### 1.3 Configuring IPv6 sockets to bind to eth0
+A straightforward way to configure an IPv6 socket before calling bind() is pass as second argument of inet_pton() the string "inet6 fe80::a6bb:6dff:fe44:fc43%eth0" and assign the value 0x20 (decimal 32) to the scope identifier field sin6_scope_id. The port number is assigned as before, and the address (or protocol) family is AF_INET6 (PF_INET6). Then call bind(). Before calling sendto(), specify the server's IPv6 address as fe80::a6bb:6dff:fe44:ddb8 and leave the scope identifier of the destination unspecified. The same holds at the server when it configures the socket structure to bind to interface eth0 by calling bind().
+
+Replace IPv4 addresses in the command-line arguments of pingc and pings by their IPv6 counterpart in colon-hexadecimal notation that is processed as a string. In your implementation, hardcode "%eth0" so that it is appended to the IPv6 colon-hexadecimal address before passing to inet_pton(). Similarly, hardcode 0x20 as the value assigned to the scope identifier. In general, the scope identifier for a specific interface may be queried by calling if_nametoindex() which is not needed for our implementation and testing.
+
+### 1.4 Testing
+Create a subdirectory v1/ and submit your work as in lab2, Problem 1. Test to verify correctness. There is no need to repeat performance evaluation.
+
+---
+
+## Problem 2 [160 pts]
+### 2.1 Tunneling overview
+Tunneling is a packet forwarding technique that allows packets sent to a final destination to make a detour to one or more intermediate forwarding nodes (e.g., routers and hosts). This helps obfuscate the true identity of the sender from the receiver (i.e., final destination) as well as the true identity of the final destination from third-party observers that monitor network traffic. For example, some servers in a country may only respond the clients whose source IP address belongs to devices located in the country. The same goes for organizations, including Purdue, where some services are available only from devices on campus (i.e., source IP addresses belonging to Purdue). Virtual private networks (VPNs) provide a means for by-passing such restrictions by deploying a packet forwarding node with a source IP address in a given country or organization through which packets from a client are forwarded. To the final destination machine (e.g., server) a client request will appear to originate from a machine with IP address in the same country or organization. To an observer who captures packets upstream (i.e., close to the client) the destination will appear to be the forwarding node, hence hiding the true identity of the final destination.
+
+When employing multiple forwarding nodes to which packets are bounced around like in a pinball machine before being forwarded to the final destination, identity of the source can be strongly anonymized so that even when some forwarding nodes are compromised the sender's true identity remains hidden. As with many technologies, tunneling may be used for innocuous as well as nefarious purposes.
+
+### 2.2 Single-hop tunneling server
+We will build a single-hop tunneling server where a host sends traffic to the tunneling server which forwards the packets to the final destination, making it appear to the destination that the packets originate from the tunneling server. If the final destination responds, the tunneling server forwards the packets to the host. Our tunneling server is targeted at UDP-based applications such as the ping client/server of lab2, Problem 1. The tunneling server will utilize a control plane where requests to set up and tear down tunnels are mediated using TCP. The tunneling server and UDP app will use a data plane to transmit app traffic that helps hide the identities of the true source and destination.
+
+The tunneling server, tunnels, is executed at a lab machine, say, amber03,
+
+% tunnels 128.10.112.133 55550 abcdABCD
+
+where the first argument is the server's IPv4 address 128.10.112.133 (in the example amber03), 55550 the port number on which to accept TCP client requests, and the third argument abcdABCD is a secret key (a string of 8 ASCII characters). If binding fails (e.g., the specified port number is already in use) then tunnels outputs a suitable message to stdout and terminates. The user reruns tunnels with a different port number (assuming the IPv4 address is correct) until bind() succeeds. tunnels follows a concurrent client/server design where the parent process uses a STREAM socket to accept new tunnel set-up and existing tunnel tear-down requests from the client, tunnelc.
+
+**New tunnel set-up request** _Parent code_. After accept() returns indicating a new communication request, the parent checks that the first byte read using read() contains the character 'c' specifying new connection request. If the check fails, the server closes the socket descriptor returned by accept(), then calls accept() with the original socket descriptor to wait for new client requests. If the first byte contains 'c' the parent checks the next 8 bytes to determine if they match the secret key (in the above example, 'a', 'b', ..., 'C', 'D'). If they don't match, the socket descriptor returned by accept() is closed, and accept() is called on the old descriptor to await client requests. If the secret keys match, the parent expects 4 bytes specifying the final destination's IPv4 address. This is followed by 2 bytes specifying the final destinations port number. The final 4 bytes returned by read() specify the source IPv4 address. Note to take care of big endian/little endian conversion so that the client request is correctly interpreted.
+
+The parent updates a global data structure, struct forwardtab tabentry[6], where
+
+```
+struct forwardtab {
+unsigned long srcaddress;
+unsigned short srcport;
+unsigned long dstaddress;
+unsigned short dstport;
+unsigned short tunnelsport; }
+```
+
+tunnels limits active forwarding sessions to 6, ignoring additional client requests. Initialize all the fields of tabentry[] to 0. tabentry[i].srcaddress (i = 0, 1, ..., 5) equaling 0 will indicate that the i'th table entry is free. When a valid client request to establish a new tunnel session arrives, the fields of the first available entry tabentry[] (assuming a free entry exists) are filled with values: srcaddress is updated with the source address specified in the request, dstaddress and dstport are updated with the destination IPv4 address and port number of the request. The two fields srcport and tunnelsport are filled in the child process that the parent process will fork after updating tabentry[]. Before forking a child process, the parent stores the index of tabentry[] for the new tunneling session in a local variable, short tunnelindex, that the child process will use to carry out packet forwarding.
+
+_Child code_. Whereas the parent process of the concurrent server is responsible for setting up new tunneling session requests, a child process is responsible for carrying out the actual forwarding as well as handling termination of a tunneling session. Hence a child has a hand in both the control plane and data plane, with the latter being its primary responsibility. Upon being forked, a child process creates a UDP socket and binds it to a port starting at 60000. If bind() fails because a port number is already in use, the child increments the port number and calls bind() until it succeeds. The child uses the TCP socket set up by the parent to communicate the 2-byte port number to the client by calling write(). The client will use the received port number and the tunneling servers IPv4 address (e.g., 128.10.112.133 in the above example) to transmit its data packets to the tunneling server by calling sendto().
+
+The child process creates a second UDP socket that will be used to forward the payload received from the client. It binds to an unused port number starting at 64000 (incrementing the port number of bind() fails) which is stored in the field tunnelsport. Responses from the final destination will arrive at port tunnelsport whose payload the child will forward to the client using the first UDP socket by calling sendto(). To monitor packets arriving on the two UDP sockets, the child may register a signal handler for SIGPOLL/SIGIO which calls recvfrom() to receive a payload to forward on the other UDP socket by calling sendto(). Since SIGPOLL does not indicate on which UDP socket a packet has arrived the two socket descriptors must be made nonblocking and asynchronous so that recvfrom() does not block when called on the socket that did not receive a packet. Using signal handlers is an extension of the technique used in lab3, Problem 3. A more elegant method uses the select() system call to monitor activity on multiple file descriptors. Since the child needs to monitor the TCP socket inherited from the parent for a termination socket, use select() to monitor activity on the three socket descriptors. If the child receives on the TCP socket an 8-byte message containing the secret key, it closes the TCP socket, frees up the session entry in tabentry[], and calls exit() to terminate.
+
+### 2.3 Single-hop tunneling client
+The client side consists of two apps, tunnelc that sets up a tunneling session by contacting the tunnels, and the UDP app that sends its data to the tunneling server which forwards the payload to the final destination. The tunneling client, tunnelc, is executed at a lab machine, say, amber02,
+
+% tunnelc 128.10.112.133 55550 abcdABCD 128.10.112.134 128.10.112.135 56001
+
+where the first two arguments specify the coordinates of the tunneling server tunnels, the third argument is a secret key (same as at tunnels), the fourth argument is the IPv4 address of the machine where a UDP client app will run (e.g., 128.10.112.134 for amber04), and the last two arguments specify the coordinates of the final destination (i.e., UDP server app), in the above example, 128.10.112.135 for amber05. If tunneling session set-up is successful, tunnelc will receive the UDP port number of UDP socket of the child process executing tunnels over the TCP control plane which it prints on stdout. With the port number in hand, we can execute the UDP client app, pingc, on amber04
+
+% pingc 128.10.112.133 60007 128.10.112.134
+
+where the second argument, in the above example 60007, is the port number output by tunnelc on stdout. pingc's payload is sent to tunnels which forwards it to the final destination at which pings runs. Responses sent by pings to the child process of tunnels are returned to pingc.
+
+### 2.4 Testing
+Place your code along with Makefile and README in a new subdirectory v2/. Test and verify that your single-hop tunneling server implementation works correctly. By default, run the four apps --- tunnels, tunnelc, pings, pingc --- on different amber machines in our lab. Other combinations may be meaningful such as running tunnelc and pingc on the same host.
+
+--- 
+
+## Bonus problem A [50 pts]
+### 3.1 General background
+In Problem 2 we have used an insecure way --- sending a secret key in the clear --- to authenticate a client. Such methods were the norm well into the 1990s before the adoption of cryptographic primitives in everyday network protocols. Authentication is facilitated by basic cryptographic primitives which can also be used for implementing confidentiality (i.e., encryption) and integrity (i.e., message has not been modified by an attacker). The underlying mechanisms are one and the same. Cryptographic primitives used in network protocols rely on a message encoding function E, a decoding function D, and two distinct keys, e and d, called public and private keys, respectively. These systems are referred to as asymmetric or public-key cryptographic systems. Given a message m (a bit string), called plaintext, that Alice wishes to send Bob, imparting confidentiality that protects m from eavesdroppers works as follows:
+
+_Confidentiality:_  
+(a) Alice computes encrypted message, s = E(m,e), using m and Bob's public key e. B's public key, as the name indicates, is assumed to be known to all parties who wish to send secret messages to B.  
+(b) Bob receives s (e.g., payload of UDP or TCP packet), then computes m = D(s,d) which yields the original unencrypted message m.  
+(c) It is assumed that without knowing B's private key d, computing m from s is computationally difficult.  
+
+D can be viewed as an inverse of E, and D is a "one-way function" in the sense that encrypting --- going in one direction --- is computationally easy but decrypting (i.e., inverting E) without knowing B's private key (which we assume he safeguards) is computationally hard. That is, unless P = NP.
+
+For authentication, the same primitives are employed but in reverse. That is, Bob wishes to send a message, called certificate s, to Alice whereby Alice, upon receiving s, can determine that Bob is the originator of s.
+
+_Authentication:_  
+(a) Bob computes certificate, s = D(m,d), where m is a plaintext message that says "I am Bob, born around 1903, my favorite color is metallic black, gettimeofday() is ... and I want you to send me the requested file" using his private key d.  
+(b) Alice, upon receiving s, computes m = E(s,e), which yields the original plaintext message which follows a strict format (e.g., name, birthday, favorite color, time stamp).  
+(c) It is assumed that only B can generate a certificate s using his private key d, that when encrypted via E using B's public key e results in a meaningful plaintext message that follows a specific format.  
+
+The two functions E and D commute in the sense that either order of function composition yields the original (plaintext) message as they act as inverses of each other. The popular RSA public-key cryptosystem that relies on the assumption that factoring large primes is computationally hard yields such E and D.
+
+### 3.2 Client authentication: public key infrastructure
+A central issue of using a public key cryptosystem for authentication and confidentiality is bootstrapping, i.e., setting up the system, since Alice knowing Bob's public key is easier said than done. For example, if an impostor C somehow convinces A that a key that C created, say e*, is B's public key, all bets are off. So how do we set up a distributed system where the true public keys of all relevant parties are accessible? Unfortunately, there is no solution to the bootstrapping problem but for brute-force system initialization where designated "trusted" parties, called certificate authority (CA), serve as arbiters of verifying public keys. Operating systems are distributed with hardcoded public keys of CAs so that a user of the operating system can make use of their services. For example, if a secure communication session over UDP or TCP to a server is desired, the server's address --- the symbolic domain name of an IP address, say, www.cs.purdue.edu in place of 128.10.19.120 --- is transmitted to the CA encrypted with the CA's public key. The CA then responds with the public key of the server as a signed certificate (i.e., step (a) of Authentication) which the client can authenticate by applying E with the CA's public key (step (b) of Authentication). To reduce overhead, servers may obtain pre-signed CA certificates which are communicated to clients directly.
+
+When engaging in lengthy data exchanges (e.g., file server responding to client requests), a public-key infrastructure (PKI) is used to establish mutual authentication and secretely share a private key, after which symmetric encryption using the shared private key is used to achieve data confidentiality. This is due to symmetric encryption being more efficient. A well-known symmetric encryption method is one-time pad which XORs data bits with a random sequence obtained from the private key. To date, one-time pad is the only provably secure encryption method assuming that the random sequence is indeed random and the private key is known to the communicating parties only. In the real world, pseudo-random sequences take the place of random sequences, hence one-time pads are only as secure as the randomness of pseudo-random sequences generated from private keys. As John von Neumann noted: "Anyone who considers arithmetical methods of producing random digits is, of course, in a state of sin."
+
+### 3.3 Client authentication: implementation
+When building network applications using socket programming, TLS (Transport Layer Security) and its precursor SSL (Secure Sockets Layer) using the OpenSSL API is the default way to code crytographic protocols. Unlike TCP/UDP/IP socket programming which is narrow in scope and supported by select system calls in commodity operating systems, SSL is more complex due to its generality which stems from the diversity and richness of context dependent security protocols. SSL programming is covered in a network security course, and outside the scope of CS536. We will, however, implement a limited form of cryptographic security by replacing the simple secret-key/password method of authenticating the client in Problem 2 with a more secure method following the cryptographic framework of 3.2.
+
+We will assume that a server maintains an access control list (ACL) of IP addresses in dotted decimal form and their associated public keys. A client sends a request in the form of a certificate signed using function D and the client's private key. The server, upon receiving a request, applies E with the client's public key with the assumption that its IP address is contained in the ACL. If the result matches a specific format, the requested service is provided. Otherwise the request is rejected. From a network programming perspective, the internals of E and D are not relevant since they can be treated as black boxes. TLS provide myriad E and D that may be selected by the communicating parties. Instead of implementing RSA or other cryptographic algorithms, we will define simplified black boxes E and D as follows.
+
+_Decoding function D:_  
+The decoding function, unsigned long long decodesimp(unsigned long long x, unsigned long long privkey), takes unsigned long long x and private key privkey as input and returns an unsigned long long value which will be used by the client to authenticate itself to the server. decodesimp() works by performing bit-wise XOR of the 64 bits of x and privkey. The value x will be the client IPv4 address concatenated with itself viewed as a 64-bit unsigned value. The 8-byte unsigned value returned by decodesimp() will be sent in place of the 8-byte secret-key in the request packet to the server.
+
+_Encoding function E:_  
+The encoding function, unsigned long long encodesimp(unsigned long long y, unsigned long long pubkey), takes unsigned long long y and public key pubkey as input. pubkey is the public key associated with the IPv4 address of a client that sent a request. The server looks up the public key pubkey associated with the client's IPv4 address. The first 8 bytes of the request packet when viewed as unsigned long long will be used as y to compute encodesimp() which takes the bit-wise XOR of y and pubkey. If the value returned by encodesimp() is the client's IPv4 address concatenated with itself, the server will consider the client authenticated. Little endian/big endian conversion must be properly handled to ensure that encodesimp() and decodesimp() work correctly. Since XOR is its own inverse, E and D will commute and satisfy our needs.
+
+Using the certificate computed by D, y, is subject to replay attack by an adversary who may record y through traffic sniffing, then reuse it to authenticate itself as a valid client to download a file. This can be mitigated by extending the certificate to include sequence numbers and timestamps that do not remain static. We will omit this part in this exercise. Modify the code of Problem 2 so that the actual forwarding functionality that involves the child process of tunnels, UDP ping apps pings and pingc are removed. We will focus on the control plane between tunnelc and tunnels where tunnelc authenticates itself to tunnels. The 8-byte secret key passed as command-line argument is preserved but ignored by the code of tunnelc and tunnels. Instead, the 8-byte self-concatenated IPv4 address of the client is XOR'ed with the client's private key, for simplicity, hardcoded as 101010...10 (64 bits of alternating 1 and 0). The server, tunnels, upon receiving the tunneling session request, performs encoding with the public key of the client (for simplicity hardcoded as 101010...10) by XOR'ing the received 8 bytes viewed as unsigned long long with the client's public key. If the result matches the self-concatenated 8-byte IPv4 address of the client, the request is accepted. Implement the modified code in v3/. Test and verify that tunneling session request authentication works correctly.
+
+## Bonus problem B [20 pts]
+Modify Problem 2, lab3, so that remote command client/server app uses link-local IPv6 addresses in place of IPv4 addresses as in Problem 1 of this lab. Place your code in v4/. Test and verify that the modified app works correctly.
+
+The Bonus Problems are completely optional. They serve to provide additional exercises to understand material. Bonus problems help more readily reach the 45% contributed by lab component to the course grade.
