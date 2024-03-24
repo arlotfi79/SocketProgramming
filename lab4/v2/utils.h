@@ -10,6 +10,6 @@ struct forwardtab {
 };
 
 int find_available_entry(struct forwardtab tabentry[]);
-
+void free_session_entry(struct forwardtab tabentry[], int index);
 
 #endif //UTILS_H

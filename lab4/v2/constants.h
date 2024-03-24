@@ -7,7 +7,7 @@
 
 #define MAX_CLIENTS 6
 #define MAX_PORT_NUM 6 // Maximum port length is 5 digits plus null terminator
-#define MAX_ATTEMPTS 20
+#define MAX_ATTEMPTS 200 // Maximum number of iteration to take for binding to a port
 
 
 #endif
