@@ -149,3 +149,8 @@ The provided Makefile automates the compilation process for the tunnelc and tunn
 ```
 3. Cleaning unuseful files in the end
     * `make clean`
+
+---
+
+### 📝 Ping Client/Server
+Please note that the ping client/server code used in this project is adapted from Lab 2, Problem 1. It has been reuploaded here for easier access and integration into the tunneling server.
