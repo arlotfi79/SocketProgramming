@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
     struct addrinfo *server_info, *client_info;
 
     // Building addresses
-    if ((rv = build_address("127.0.0.1", "0", SOCK_STREAM, &client_info) != 0)) {
+    if ((rv = build_address(NULL, "0", SOCK_STREAM, &client_info) != 0)) {
         fprintf(stderr, "Tunnelc: getaddrinfo client: %s\n", gai_strerror(rv));
         return 1;
     }
@@ -67,19 +67,40 @@ int main(int argc, char *argv[]) {
 
     // Send request to establish tunneling session
     char request_type = 'c';
-    write(sockfd, &request_type, sizeof(request_type));
+    if (write(sockfd, &request_type, sizeof(request_type)) < 0){
+        printf("Tunnelc: Error sending request. %c\n", request_type);
+        close(sockfd);
+    }
 
     // Send secret key
-    write(sockfd, secret_key, strlen(secret_key));
+    if (write(sockfd, secret_key, strlen(secret_key)) < 0) {
+        printf("Tunnelc: Error sending secret_key. %s\n", secret_key);
+        close(sockfd);
+    }
+
 
     // Send final destination's IPv4 address (4B), port number (2B), and client IPv4 address (4B)
-    write(sockfd, &destination_ip, sizeof(destination_ip));
-    write(sockfd, &destination_port, sizeof(destination_port));
-    write(sockfd, &client_ip, sizeof(client_ip));
+    if (write(sockfd, &destination_ip, sizeof(destination_ip)) < 0) {
+        printf("Tunnelc: Error sending dst_ip. %lu\n", destination_ip);
+        close(sockfd);
+    }
+
+    if (write(sockfd, &destination_port, sizeof(destination_port)) < 0) {
+        printf("Tunnelc: Error sending dst_port. %hu\n", destination_port);
+        close(sockfd);
+    }
+
+    if (write(sockfd, &client_ip, sizeof(client_ip)) < 0) {
+        printf("Tunnelc: Error sending client_ip. %lu\n", client_ip);
+        close(sockfd);
+    }
 
     // Receive port number from the tunneling server
     char port_message[MAX_PORT_NUM];
-    read(sockfd, port_message, sizeof(port_message));
+    if (read(sockfd, port_message, sizeof(port_message)) < 0) {
+        printf("Tunnelc: Error reading data_port. %s\n", port_message);
+        close(sockfd);
+    }
 
     // Print data port number
     printf("Data port number: %s\n", port_message);

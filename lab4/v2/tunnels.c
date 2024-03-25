@@ -24,9 +24,6 @@ int main(int argc, char *argv[]) {
     const char *const ip = argv[1];
     const char *const port = argv[2];
     const char *const secret_key = argv[3];
-    unsigned long dest_addr;
-    unsigned long src_addr;
-    unsigned short dest_port;
     short tunnelindex = 0;
 
 
@@ -36,6 +33,7 @@ int main(int argc, char *argv[]) {
     socklen_t addr_len;
 
     char buffer[1024];
+    memset(buffer, 0, sizeof(buffer));
 
 
     if ((rv = build_address(ip, port, SOCK_STREAM, &servinfo) != 0)) {
@@ -93,6 +91,77 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
 
+        // Read the first byte from the client
+        memset(buffer, 0, sizeof(buffer));
+        if (read(control_conn, buffer, 1) <= 0) {
+            perror("Error reading first byte from control connection\n");
+            close(control_conn);
+            continue;
+        }
+
+        // Check if it's a new connection request
+        if (buffer[0] != 'c') {
+            printf("Invalid request: %c\n", buffer[0]);
+            close(control_conn);
+            continue;
+        }
+
+        // Read the secret key from the client
+        memset(buffer, 0, sizeof(buffer));
+        if (read(control_conn, buffer, 8) <= 0) {
+            perror("Error reading secret key from control connection\n");
+            close(control_conn);
+            continue;
+        }
+
+        // Check if the secret key matches
+        if (strncmp(buffer, secret_key, 8) != 0) {
+            printf("Invalid secret key \n");
+            close(control_conn);
+            continue;
+        }
+
+        // Read destination IPv4 address from the client
+        unsigned long destination_ip;
+        if (read(control_conn, &destination_ip, sizeof(destination_ip)) <= 0) {
+            perror("Error reading destination address from control connection\n");
+            close(control_conn);
+            continue;
+        }
+
+        // Read destination port number from the client
+        unsigned short dest_port;
+        if (read(control_conn, &dest_port, sizeof(dest_port)) <= 0) {
+            perror("Error reading destination port from control connection\n");
+            close(control_conn);
+            continue;
+        }
+
+
+        // Read source IPv4 address from the client
+        unsigned long client_ip;
+        if (read(control_conn, &client_ip, sizeof(client_ip)) <= 0) {
+            perror("Error reading source address from control connection");
+            close(control_conn);
+            continue;
+        }
+
+        // Find available entry in tabentry[]
+        tunnelindex = find_available_entry(tabentry);
+
+        if (tunnelindex != -1) {
+            printf("Available entry found at index %d\n", tunnelindex);
+        } else {
+            printf("Maximum number of forwarding sessions reached\n");
+            close(control_conn);
+            continue;
+        }
+
+        // Store the values in data structure
+        tabentry[tunnelindex].srcaddress = client_ip;
+        tabentry[tunnelindex].dstaddress = destination_ip;
+        tabentry[tunnelindex].dstport = ntohs(dest_port);
+
         // Fork child process to handle packet forwarding
         pid_t pid = fork();
         if (pid < 0) {
@@ -107,20 +176,21 @@ int main(int argc, char *argv[]) {
             // 1st Socket: client<->tunnel
             struct addrinfo *p1;
             int data_sock, attempts = 0;
-            struct addrinfo *data_addr;
+            struct addrinfo *srv_addr;
 
             char data_port[MAX_PORT_NUM];
 
             do {
                 snprintf(data_port, sizeof(data_port), "%d", atoi("60000") + attempts); // Increment port number
 
-                if ((rv = build_address(ip, data_port, SOCK_DGRAM, &data_addr)) != 0) {
+
+                if ((rv = build_address(ip, data_port, SOCK_DGRAM, &srv_addr)) != 0) {
                     fprintf(stderr, "getaddrinfo server: %s\n", gai_strerror(rv));
                     return EXIT_FAILURE;
                 }
 
                 // loop through all the results and bind to the first we can
-                for (p1 = data_addr; p1 != NULL; p1 = p1->ai_next) {
+                for (p1 = srv_addr; p1 != NULL; p1 = p1->ai_next) {
                     if ((data_sock = socket(p1->ai_family, p1->ai_socktype, p1->ai_protocol)) == ERROR) {
                         perror("Tunnels: socket");
                         continue;
@@ -146,7 +216,7 @@ int main(int argc, char *argv[]) {
                 if (p1 == NULL) {
                     // Bind successful, print the port number and exit
                     fprintf(stderr, "Server: maximum number of attempts reached\n");
-                    freeaddrinfo(data_addr);
+                    freeaddrinfo(srv_addr);
                     return EXIT_FAILURE;
                 }
 
@@ -158,7 +228,7 @@ int main(int argc, char *argv[]) {
             } while (++attempts < MAX_ATTEMPTS);
 
             printf("Tunnels: successfully bound to data port %s | client<->tunnels\n", data_port);
-            freeaddrinfo(data_addr);
+            freeaddrinfo(srv_addr);
 
             // Inform client about the data port
             if (write(control_conn, &data_port, sizeof(data_port)) != sizeof(data_port)) {
@@ -172,20 +242,20 @@ int main(int argc, char *argv[]) {
             struct addrinfo *p2;
             attempts = 0;
             int response_sock;
-            struct addrinfo *response_addr;
+            struct addrinfo *dest_addr;
 
             char response_port[MAX_PORT_NUM];
 
             do {
                 snprintf(response_port, sizeof(response_port), "%d", atoi("64000") + attempts); // Increment port number
 
-                if ((rv = build_address(ip, response_port, SOCK_DGRAM, &response_addr)) != 0) {
+                if ((rv = build_address(ip, response_port, SOCK_DGRAM, &dest_addr)) != 0) {
                     fprintf(stderr, "getaddrinfo server: %s\n", gai_strerror(rv));
                     return EXIT_FAILURE;
                 }
 
                 // loop through all the results and bind to the first we can
-                for (p2 = response_addr; p2 != NULL; p2 = p2->ai_next) {
+                for (p2 = dest_addr; p2 != NULL; p2 = p2->ai_next) {
                     if ((response_sock = socket(p2->ai_family, p2->ai_socktype, p2->ai_protocol)) == ERROR) {
                         perror("Tunnels: socket");
                         continue;
@@ -212,7 +282,7 @@ int main(int argc, char *argv[]) {
                 if (p2 == NULL) {
                     // Bind successful, print the port number and exit
                     fprintf(stderr, "Tunnels: maximum number of attempts reached\n");
-                    freeaddrinfo(response_addr);
+                    freeaddrinfo(dest_addr);
                     return EXIT_FAILURE;
                 }
 
@@ -225,10 +295,9 @@ int main(int argc, char *argv[]) {
             } while (++attempts < MAX_ATTEMPTS);
 
             printf("Tunnels: successfully bound to forward port %s for | tunnels<->dest\n", response_port);
-            freeaddrinfo(response_addr);
+            freeaddrinfo(dest_addr);
 
-            // adding ports to the struct
-            tabentry[tunnelindex_child].srcport = atoi(data_port);
+            // adding tunnels ports to the struct
             tabentry[tunnelindex_child].tunnelsport = atoi(response_port);
 
             // Monitor activity on control_conn, data_sock, and data_conn using select()
@@ -248,24 +317,26 @@ int main(int argc, char *argv[]) {
 
                 // Handle activity on control_conn (TCP)
                 if (FD_ISSET(control_conn, &readfds)) {
+                    int numbbytes = 0;
                     // Read termination message from the client
-                    if (read(control_conn, buffer, 8) < 0) {
+                    if ((numbbytes = read(control_conn, buffer, 8)) < 0) {
                         perror("Error reading termination message from control connection");
                         exit(EXIT_FAILURE);
                     }
 
-                    // Check if termination message matches the secret key
-                    if (strncmp(buffer, secret_key, 8) == 0) {
-                        // go through termination process
-                        close(control_conn);
-                        free_session_entry(tabentry, tunnelindex_child);
-                        exit(EXIT_SUCCESS);
+                    if (numbbytes > 0) {
+                        // Check if termination message matches the secret key
+                        if (strncmp(buffer, secret_key, 8) == 0) {
+                            // go through termination process
+                            close(control_conn);
+                            free_session_entry(tabentry, tunnelindex_child);
+                            exit(EXIT_SUCCESS);
+                        }
                     }
                 }
 
                 // Handle activity on data_sock
                 if (FD_ISSET(data_sock, &readfds)) {
-                    // Receive data from client
                     char data[1024];
                     struct sockaddr_in client_addr;
                     socklen_t client_addr_len = sizeof(client_addr);
@@ -278,15 +349,26 @@ int main(int argc, char *argv[]) {
                         exit(EXIT_FAILURE);
                     }
 
-                    // Forward the received data to the destination
-                    struct sockaddr_in dst_addr;
-                    memset(&dst_addr, 0, sizeof(dst_addr));
-                    dst_addr.sin_family = AF_INET;
-                    dst_addr.sin_addr.s_addr = tabentry[tunnelindex].dstaddress;
-                    dst_addr.sin_port = tabentry[tunnelindex].dstport;
+                    tabentry[tunnelindex_child].srcport = ntohs(client_addr.sin_port);
 
-                    ssize_t send_len = sendto(response_sock, data, recv_len, 0, (struct sockaddr *) &dst_addr,
-                                              sizeof(dst_addr));
+                    // converting
+                    struct in_addr addr;
+                    addr.s_addr = tabentry[tunnelindex_child].dstaddress;
+                    char dst_ip_str[INET_ADDRSTRLEN];
+                    inet_ntop(AF_INET, &addr, dst_ip_str, INET_ADDRSTRLEN);
+
+                    char dstport_str[MAX_PORT_NUM]; // Assuming a maximum port length of 5 digits
+                    sprintf(dstport_str, "%hu", tabentry[tunnelindex_child].dstport);
+
+                    // Forward the received data to the destination
+                    struct addrinfo *pings_addr;
+                    if ((rv = build_address(dst_ip_str, dstport_str, SOCK_DGRAM, &pings_addr) != 0)) {
+                        fprintf(stderr, "getaddrinfo server: %s\n", gai_strerror(rv));
+                        return EXIT_FAILURE;
+                    }
+
+                    ssize_t send_len = sendto(response_sock, data, recv_len, 0, pings_addr->ai_addr, pings_addr->ai_addrlen);
+
                     if (send_len < 0) {
                         perror("Tunnels: Error sending data to destination");
                         close(data_sock);
@@ -310,14 +392,24 @@ int main(int argc, char *argv[]) {
                         exit(EXIT_FAILURE);
                     }
 
-                    // Forward the received response to the client
-                    struct sockaddr_in client_addr;
-                    memset(&client_addr, 0, sizeof(client_addr));
-                    client_addr.sin_family = AF_INET;
-                    client_addr.sin_addr.s_addr = tabentry[tunnelindex].srcaddress;
-                    client_addr.sin_port = tabentry[tunnelindex].srcport;
+                    // converting
+                    struct in_addr addr;
+                    addr.s_addr = tabentry[tunnelindex_child].srcaddress;
+                    char src_ip_str[INET_ADDRSTRLEN];
+                    inet_ntop(AF_INET, &addr, src_ip_str, INET_ADDRSTRLEN);
 
-                    ssize_t send_len = sendto(data_sock, buffer, recv_len, 0, (struct sockaddr *)&client_addr, sizeof(client_addr));
+                    char srcport_str[MAX_PORT_NUM]; // Assuming a maximum port length of 5 digits
+                    sprintf(srcport_str, "%hu", tabentry[tunnelindex_child].srcport);
+
+                    // Forward the received data to the destination
+                    struct addrinfo *pingc_addr;
+                    if ((rv = build_address(src_ip_str, srcport_str, SOCK_DGRAM, &pingc_addr) != 0)) {
+                        fprintf(stderr, "getaddrinfo server: %s\n", gai_strerror(rv));
+                        return EXIT_FAILURE;
+                    }
+
+                    ssize_t send_len = sendto(data_sock, data, recv_len, 0, pingc_addr->ai_addr, pingc_addr->ai_addrlen);
+
                     if (send_len < 0) {
                         perror("Error sending response to client");
                         close(data_sock);
@@ -330,81 +422,7 @@ int main(int argc, char *argv[]) {
             // Terminate child process
             exit(EXIT_SUCCESS);
         } else { // Parent process code
-
-            // Read the first byte from the client
-            if (read(control_conn, buffer, 1) < 0) {
-                perror("Error reading first byte from control connection");
-                close(control_conn);
-                continue;
-            }
-
-            // Check if it's a new connection request
-            if (buffer[0] != 'c') {
-                printf("Invalid request: %c\n", buffer[0]);
-                close(control_conn);
-                continue;
-            }
-
-            // Read the secret key from the client
-            if (read(control_conn, buffer, 8) < 0) {
-                perror("Error reading secret key from control connection");
-                close(control_conn);
-                continue;
-            }
-
-            // Check if the secret key matches
-            if (strncmp(buffer, secret_key, 8) != 0) {
-                printf("Invalid secret key\n");
-                close(control_conn);
-                continue;
-            }
-
-            // Read destination IPv4 address from the client
-            if (read(control_conn, buffer, 4) < 0) {
-                perror("Error reading destination address from control connection");
-                close(control_conn);
-                continue;
-            }
-
-            dest_addr = *(unsigned long *) buffer;
-
-            // Read destination port number from the client
-            if (read(control_conn, buffer, 2) < 0) {
-                perror("Error reading destination port from control connection");
-                close(control_conn);
-                continue;
-            }
-
-            dest_port = *(unsigned short *) buffer;
-
-            // Read source IPv4 address from the client
-            if (read(control_conn, buffer, 4) < 0) {
-                perror("Error reading source address from control connection");
-                close(control_conn);
-                continue;
-            }
-
-            src_addr = *(unsigned long *) buffer;
-
-            // Find available entry in tabentry[]
-            tunnelindex = find_available_entry(tabentry);
-
-            if (tunnelindex != -1) {
-                printf("Available entry found at index %d\n", tunnelindex);
-            } else {
-                printf("Maximum number of forwarding sessions reached\n");
-                close(control_conn);
-                continue;
-            }
-
-            // Update tabentry[] with client request details
-            tabentry[tunnelindex].srcaddress = src_addr;
-            tabentry[tunnelindex].dstaddress = dest_addr;
-            tabentry[tunnelindex].dstport = dest_port;
-
-            // Close control connection in parent process
             close(control_conn);
-            printf("New tunneling session established (tunnelindex: %d)\n", tunnelindex);
         }
     }
 
