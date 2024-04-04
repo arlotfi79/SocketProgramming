@@ -13,7 +13,7 @@
 #include "../lib/socket_utils.h"
 #include "../lib/congestion_control.h"
 
-sem_t buffer_sem;
+sem_t *buffer_sem;
 struct timeval start_time;
 int buffer_occupancy = 0;
 
@@ -73,7 +73,11 @@ int main(int argc, char *argv[]) {
     }
 
     // Buffer for receiving audio data
-    sem_init(&buffer_sem, 0, 1);
+    buffer_sem = sem_open("/buffer_sem", O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
+    if (buffer_sem == SEM_FAILED) {
+        perror("sem_open");
+        exit(EXIT_FAILURE);
+    }
     struct itimerval timer = {{0, 313000}, {0, 1}};
     setitimer(ITIMER_REAL, &timer, NULL);
     gettimeofday(&start_time, NULL);
@@ -88,10 +92,10 @@ int main(int argc, char *argv[]) {
             return -1;
         }
 
-        sem_wait(&buffer_sem);
+        sem_wait(buffer_sem);
         memcpy(buffer + buffer_occupancy, block, num_bytes_received);
         buffer_occupancy += num_bytes_received;
-        sem_post(&buffer_sem);
+        sem_post(buffer_sem);
 
         // Send feedback packet after each read/write operation
         send_feedback(sockfd, server_info, buffer_occupancy, targetbuf, buffersize);
@@ -100,8 +104,9 @@ int main(int argc, char *argv[]) {
 //        fprintf(logfile, "%d\n", buffer_occupancy);
     }
 
-    // Close the logfile and socket
-//    fclose(logfile);
+    // Close
     close(sockfd);
+    sem_close(buffer_sem);
+    sem_unlink("/buffer_sem");
 
 }
