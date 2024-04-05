@@ -17,7 +17,7 @@ double adjust_sending_rate(double lambda, double epsilon, double gamma, double b
 }
 
 // Function to calculate and send feedback packet
-void send_feedback(int sockfd, struct addrinfo *server_info, int Q_t, int targetbuf, int buffersize) {
+int prepare_feedback(int Q_t, int targetbuf, int buffersize) {
     int q;
     if (Q_t > targetbuf) {
         q = ((Q_t - targetbuf) / (buffersize - targetbuf)) * 10 + 10;
@@ -27,8 +27,8 @@ void send_feedback(int sockfd, struct addrinfo *server_info, int Q_t, int target
         q = 10;
     }
 
-    if (sendto(sockfd, &q, sizeof(q), 0, server_info->ai_addr, server_info->ai_addrlen) == -1) {
-        perror("Client: Error sending feedback");
-    }
+    return q;
 }
+
+
 

@@ -8,5 +8,6 @@
 
 #define Q_STAR 10
 #define FILENAME_LENGTH 20
+#define MAX_PACKETS 1000
 
 #endif

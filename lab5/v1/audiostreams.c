@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <stdbool.h>
 #include <time.h>
+#include <sys/time.h>
 
 
 #include "../lib/socket_utils.h"
@@ -91,6 +92,12 @@ int main(int argc, char *argv[]) {
     // Main loop
     unsigned short buffer_state;
 
+    // Array to store lambda values
+    double lambda_values[MAX_PACKETS];
+    double elapsed_times[MAX_PACKETS];
+    struct timeval start_time, current_time;
+    gettimeofday(&start_time, NULL); // Get start time
+
     while (1) {
         unsigned int len = sizeof(client_addr);
         char filename[FILENAME_LENGTH + 1];
@@ -115,7 +122,7 @@ int main(int argc, char *argv[]) {
         printf("Server: received blocksize %d\n", blocksize);
 
         // Check filename validity
-        if (strlen(filename) != FILENAME_LENGTH || strchr(filename, ' ') != NULL) {
+        if (strlen(filename) > FILENAME_LENGTH || strchr(filename, ' ') != NULL) {
             printf("Server: Invalid filename: %s\n", filename);
             continue;
         }
@@ -147,12 +154,25 @@ int main(int argc, char *argv[]) {
                 return -1;
             }
 
-            printf("Server: child process successfully bound to port %s\n", port);
+            // Get the socket address
+            struct sockaddr_in sin;
+            socklen_t sin_len = sizeof(sin);
+            if (getsockname(child_sockfd, (struct sockaddr *)&sin, &sin_len) == -1) {
+                perror("getsockname");
+                return -1;
+            }
+
+            // Print the port number
+            printf("Server: child process successfully bound to port %d\n", ntohs(sin.sin_port));
+
             freeaddrinfo(child_servinfo);
 
             // ----- Handle streaming -----
             // Open file
-            FILE *file = fopen(filename, "rb");
+            // Append the relative path to the filename
+            char relative_path[100]; // Assuming the relative path is within 50 characters
+            sprintf(relative_path, "../%s", filename);
+            FILE *file = fopen(relative_path, "rb");
             if (file == NULL) {
                 perror("Server: Error opening file");
                 exit(1);
@@ -170,18 +190,33 @@ int main(int argc, char *argv[]) {
                     return -1;
                 }
                 printf("Server: sent packet #%d\n", packet_counter);
+                memset(buffer, 0, blocksize); // Clear buffer
 
                 // Receive feedback from client
+                printf("Server: waiting for feedback\n");
                 if (recvfrom(child_sockfd, &buffer_state, sizeof(buffer_state), 0, (struct sockaddr *) &client_addr, &len) < 0) {
                     perror("Server: Error receiving feedback");
                     close(child_sockfd);
                     fclose(file);
                     return -1;
                 }
+                printf("Server: received feedback! buffer state value: %d\n", buffer_state);
 
                 // Adjust sending rate based on feedback
                 lambda = adjust_sending_rate(lambda, epsilon, gamma, beta, buffer_state);
                 printf("Server: adjusted lambda to %f\n", lambda);
+
+
+                // --- Logging ---
+                // Get current time
+                gettimeofday(&current_time, NULL);
+                // Calculate elapsed time in milliseconds
+                double elapsed_time = ((current_time.tv_sec - start_time.tv_sec) * 1000.0) +
+                        ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
+                // Store lambda value
+                lambda_values[packet_counter] = lambda;
+                elapsed_times[packet_counter] = elapsed_time;
+                // --- Logging ---
 
                 // Calculate new packet interval
                 packet_interval = (int)(1000.0 / lambda);
@@ -201,6 +236,20 @@ int main(int argc, char *argv[]) {
             }
             // ----- Handle streaming -----
 
+            // Log lambda values
+            FILE *log_file = fopen(logfileS, "w");
+            if (log_file == NULL) {
+                perror("Error opening log file");
+                exit(EXIT_FAILURE);
+            }
+
+            double normalized_time = 0.0;
+            for (int i = 0; i < packet_counter; ++i) {
+                normalized_time = ((i == 0) ? 0.0 : elapsed_times[i]);
+                fprintf(log_file, "%.3f %f\n", normalized_time, lambda_values[i]);
+            }
+
+            fclose(log_file);
             close(child_sockfd);
             exit(0);
         } else if (pid < 0) {
