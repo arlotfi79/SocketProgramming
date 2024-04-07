@@ -4,6 +4,8 @@
 #include <semaphore.h>
 #include "queue.h"
 
+void handle_alarm(int sig);
+
 sem_t* create_semaphore(const char* sem_name);
 int handle_received_data(Queue* buffer, uint8_t* block, int num_bytes_received, sem_t* buffer_sem, int buffersize);
 

@@ -6,6 +6,11 @@
 #include "concurrency_utils.h"
 #include "queue.h"
 
+void handle_alarm(int sig) {
+    printf("No data received for 2 seconds. Exiting...\n");
+    exit(EXIT_FAILURE);
+}
+
 sem_t* create_semaphore(const char* sem_name) {
     sem_t* buffer_sem = sem_open(sem_name, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
     if (buffer_sem == SEM_FAILED) {

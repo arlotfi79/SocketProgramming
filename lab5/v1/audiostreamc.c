@@ -14,12 +14,12 @@
 #include "../lib/socket_utils.h"
 #include "../lib/congestion_control.h"
 #include "../lib/concurrency_utils.h"
-#include "../lib/queue.h"
 
 sem_t *buffer_sem;
 struct timeval start_time;
 
 // TODO -> Client: implement reading audio data from the buffer and writing it to the audio device
+// Run -> ./audiostreamc.bin kj.au 4096 2899968 4096 127.0.0.1 5000 logFileC
 int main(int argc, char *argv[]) {
     if (argc != C_ARG_COUNT) {
         fprintf(stderr, "Usage: %s <audiofile> <blocksize> <buffersize> <targetbuf> "
@@ -85,16 +85,32 @@ int main(int argc, char *argv[]) {
 //    gettimeofday(&start_time, NULL);
 
     // Loop for receiving audio data
-    Queue* buffer = createQueue(buffersize);
+    Queue *buffer = createQueue(buffersize);
     uint8_t block[blocksize];
     socklen_t len = server_info->ai_addrlen;
     int packet_counter = 0;
+
+    // alarm for not receiving 1st response from the server
+    struct timeval timeout;
+    timeout.tv_sec = 2;  // after 2 seconds
+    timeout.tv_usec = 0;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        perror("Error");
+        return -1;
+    }
+
     while (1) {
         memset(block, 0, blocksize);
         int num_bytes_received = recvfrom(sockfd, block, blocksize, 0, server_info->ai_addr, &len);
         if (num_bytes_received <= 0) {
-            perror("Client: Error receiving audio data");
-            return -1;
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                printf("Timeout occurred\n");
+                return -1;
+            } else {
+                perror("Client: Error receiving audio data");
+                return -1;
+            }
         }
         printf("Client: Received packet #%d\n", packet_counter++);
 

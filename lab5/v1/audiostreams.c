@@ -14,6 +14,8 @@
 #include "../lib/constants.h"
 #include "../lib/congestion_control.h"
 
+
+// Run -> ./audiostreams.bin 1000 0.1 0.1 0.1  logFileS 127.0.0.1 5000
 int main(int argc, char *argv[]) {
 
     if (argc < S_ARG_COUNT) {
