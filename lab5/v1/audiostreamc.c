@@ -13,11 +13,10 @@
 #include "../lib/constants.h"
 #include "../lib/socket_utils.h"
 #include "../lib/congestion_control.h"
+#include "../lib/queue.h"
 
 sem_t *buffer_sem;
 struct timeval start_time;
-int buffer_occupancy = 0;
-
 
 int main(int argc, char *argv[]) {
     if (argc != C_ARG_COUNT) {
@@ -98,16 +97,13 @@ int main(int argc, char *argv[]) {
 //    gettimeofday(&start_time, NULL);
 
     // Loop for receiving audio data
-    uint8_t buffer[buffersize];
+    Queue* buffer = createQueue(buffersize);
     uint8_t block[blocksize];
-    unsigned int len = sizeof(server_info);
+    socklen_t len = server_info->ai_addrlen;
     int packet_counter = 0;
     while (1) {
         memset(block, 0, blocksize);
-        // TODO: socket gets invalid here!
-        printf("sockfd1: %d\n", sockfd);
-        int num_bytes_received = recvfrom(sockfd, block, blocksize, 0, (struct sockaddr *) &server_info, &len);
-        printf("sockfd2: %d\n", sockfd);
+        int num_bytes_received = recvfrom(sockfd, block, blocksize, 0, server_info->ai_addr, &len);
         if (num_bytes_received <= 0) {
             perror("Client: Error receiving audio data");
             return -1;
@@ -115,31 +111,34 @@ int main(int argc, char *argv[]) {
         printf("Client: Received packet #%d\n", packet_counter++);
 
         sem_wait(buffer_sem);
-        if (buffer_occupancy + num_bytes_received > buffersize) {
+        if (buffer->size + num_bytes_received > buffersize) {
             // Handle overflow situation here
             fprintf(stderr, "Client: Buffer overflow\n");
             return -1;
         } else {
-            memcpy(buffer + buffer_occupancy, block, num_bytes_received);
-            buffer_occupancy += num_bytes_received;
+            // Enqueue the received data into the buffer
+            for (int i = 0; i < num_bytes_received; i++) {
+                enqueue(buffer, block[i]);
+            }
         }
         sem_post(buffer_sem);
 
         // Send feedback packet after each read/write operation
-        unsigned short q = prepare_feedback(buffer_occupancy, targetbuf, buffersize);
-        if (sendto(sockfd, &q, sizeof(q), 0, (struct sockaddr *) &server_info, len) == -1) {
+        unsigned short q = prepare_feedback(buffer->size, targetbuf, buffersize);
+        if (sendto(sockfd, &q, sizeof(q), 0, server_info->ai_addr, len) == -1) {
             perror("Client: Error sending feedback");
             return -1;
         }
         printf("Client: Sent feedback\n");
 
         // Record buffer occupancy in the logfile
-//        fprintf(logfile, "%d\n", buffer_occupancy);
+        // fprintf(logfile, "%d\n", buffer->size);
     }
 
     // Close
     close(sockfd);
     sem_close(buffer_sem);
     sem_unlink("/buffer_sem");
+    destroyQueue(buffer);
 
 }

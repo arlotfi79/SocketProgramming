@@ -181,7 +181,8 @@ int main(int argc, char *argv[]) {
             uint8_t buffer[blocksize];
             size_t bytes_read;
 
-            int packet_counter = 0;
+            int packet_counter = 1;
+            printf("Server: Expected number of packets: %d\n", calculate_expected_number_of_packets(relative_path, blocksize));
             while ((bytes_read = fread(buffer, 1, blocksize, file)) > 0) {
                 if (sendto(child_sockfd, buffer, bytes_read, 0, (struct sockaddr *) &client_addr, len) < 0) {
                     perror("Server: Error sending file");
@@ -233,6 +234,7 @@ int main(int argc, char *argv[]) {
                     return -1;
                 }
                 packet_counter++;
+                printf("-----------------------------\n");
             }
             // ----- Handle streaming -----
 
