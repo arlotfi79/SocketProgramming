@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
     // semaphore for receiving audio data
     buffer_sem = create_semaphore("/buffer_sem");
 
-    // TODO -> Client: adding timer
+    // TODO -> Client: adding 313 msec signal to handle audio reading!
 //    struct itimerval timer = {{0, 313000}, {0, 1}};
 //    setitimer(ITIMER_REAL, &timer, NULL);
 //    gettimeofday(&start_time, NULL);
@@ -100,6 +100,22 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // Get the process ID
+    pid_t pid = getpid();
+
+    // Create the log file name
+    char logfile_name[100];
+    sprintf(logfile_name, "%s-%d.csv", logfileC, pid);
+
+    // Open the log file
+    FILE *log_file = fopen(logfile_name, "w");
+    if (log_file == NULL) {
+        perror("Error opening log file");
+        exit(EXIT_FAILURE);
+    }
+
+    fprintf(log_file, "%s, %s\n", "time (ms)", "buffer_size");
+
     while (1) {
         memset(block, 0, blocksize);
         int num_bytes_received = recvfrom(sockfd, block, blocksize, 0, server_info->ai_addr, &len);
@@ -114,6 +130,7 @@ int main(int argc, char *argv[]) {
         }
         printf("Client: Received packet #%d\n", packet_counter++);
 
+        // TODO: fix buffer overflow that occurs here (I assume bec of buffer size as we are supposed to play the audio file in real time)
         int result = handle_received_data(buffer, block, num_bytes_received, buffer_sem, buffersize);
         if (result == -1) {
             perror("Client: Error handling received data (semaphore error)");
@@ -128,10 +145,18 @@ int main(int argc, char *argv[]) {
         }
         printf("Client: Sent feedback\n");
 
+        // Log the buffer size and normalized time
+        struct timeval current_time;
+        gettimeofday(&current_time, NULL);
+        double normalized_time = (current_time.tv_sec - start_time.tv_sec) * 1000.0 + (current_time.tv_usec - start_time.tv_usec) / 1000.0;
+
+        fprintf(log_file, "%.3f, %d\n", normalized_time, buffer->size);
     }
+
 
     // Close
     close(sockfd);
+    fclose(log_file);
     sem_close(buffer_sem);
     sem_unlink("/buffer_sem");
     destroyQueue(buffer);
