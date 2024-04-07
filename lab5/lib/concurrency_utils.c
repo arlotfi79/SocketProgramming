@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "concurrency_utils.h"
+#include "queue.h"
 
 sem_t* create_semaphore(const char* sem_name) {
     sem_t* buffer_sem = sem_open(sem_name, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
@@ -23,4 +24,21 @@ sem_t* create_semaphore(const char* sem_name) {
     }
     printf("Client: Semaphore created successfully\n");
     return buffer_sem;
+}
+
+int handle_received_data(Queue* buffer, uint8_t* block, int num_bytes_received, sem_t* buffer_sem, int buffersize) {
+    sem_wait(buffer_sem);
+    if (buffer->size + num_bytes_received > buffersize) {
+        // Handle overflow situation here
+        fprintf(stderr, "Client: Buffer overflow\n");
+        sem_post(buffer_sem);
+        return -1;
+    } else {
+        // Enqueue the received data into the buffer
+        for (int i = 0; i < num_bytes_received; i++) {
+            enqueue(buffer, block[i]);
+        }
+    }
+    sem_post(buffer_sem);
+    return 0;
 }

@@ -19,7 +19,7 @@
 sem_t *buffer_sem;
 struct timeval start_time;
 
-// TODO: implement reading audio data from the buffer and writing it to the audio device
+// TODO -> Client: implement reading audio data from the buffer and writing it to the audio device
 int main(int argc, char *argv[]) {
     if (argc != C_ARG_COUNT) {
         fprintf(stderr, "Usage: %s <audiofile> <blocksize> <buffersize> <targetbuf> "
@@ -79,6 +79,7 @@ int main(int argc, char *argv[]) {
     // semaphore for receiving audio data
     buffer_sem = create_semaphore("/buffer_sem");
 
+    // TODO -> Client: adding timer
 //    struct itimerval timer = {{0, 313000}, {0, 1}};
 //    setitimer(ITIMER_REAL, &timer, NULL);
 //    gettimeofday(&start_time, NULL);
@@ -97,18 +98,11 @@ int main(int argc, char *argv[]) {
         }
         printf("Client: Received packet #%d\n", packet_counter++);
 
-        sem_wait(buffer_sem);
-        if (buffer->size + num_bytes_received > buffersize) {
-            // Handle overflow situation here
-            fprintf(stderr, "Client: Buffer overflow\n");
+        int result = handle_received_data(buffer, block, num_bytes_received, buffer_sem, buffersize);
+        if (result == -1) {
+            perror("Client: Error handling received data (semaphore error)");
             return -1;
-        } else {
-            // Enqueue the received data into the buffer
-            for (int i = 0; i < num_bytes_received; i++) {
-                enqueue(buffer, block[i]);
-            }
         }
-        sem_post(buffer_sem);
 
         // Send feedback packet after each read/write operation
         unsigned short q = prepare_feedback(buffer->size, targetbuf, buffersize);
@@ -118,8 +112,6 @@ int main(int argc, char *argv[]) {
         }
         printf("Client: Sent feedback\n");
 
-        // Record buffer occupancy in the logfile
-        // fprintf(logfile, "%d\n", buffer->size);
     }
 
     // Close
