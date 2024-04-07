@@ -17,7 +17,8 @@
 int main(int argc, char *argv[]) {
 
     if (argc < S_ARG_COUNT) {
-        fprintf(stderr, "Usage: %s <lambda> <epsilon> <gamma> <beta> <logfileS> <server IPv4 address> <server-port>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <lambda> <epsilon> <gamma> <beta> <logfileS> <server IPv4 address> <server-port>\n",
+                argv[0]);
         exit(EXIT_FAILURE);
     }
 
@@ -31,7 +32,7 @@ int main(int argc, char *argv[]) {
     char port[MAX_PORT_NUM];
 
     // Calculate initial packet_interval
-    int packet_interval = (int)(1000 / lambda);
+    int packet_interval = (int) (1000 / lambda);
 
     int rv, sockfd, attempts = 0;
     struct addrinfo *servinfo, *p;
@@ -157,7 +158,7 @@ int main(int argc, char *argv[]) {
             // Get the socket address
             struct sockaddr_in sin;
             socklen_t sin_len = sizeof(sin);
-            if (getsockname(child_sockfd, (struct sockaddr *)&sin, &sin_len) == -1) {
+            if (getsockname(child_sockfd, (struct sockaddr *) &sin, &sin_len) == -1) {
                 perror("getsockname");
                 return -1;
             }
@@ -182,8 +183,9 @@ int main(int argc, char *argv[]) {
             size_t bytes_read;
 
             int packet_counter = 1;
-            printf("Server: Expected number of packets: %d\n", calculate_expected_number_of_packets(relative_path, blocksize));
-            while ((bytes_read = fread(buffer, 1, blocksize, file)) > 0) {
+            int expected_packets = calculate_expected_number_of_packets(relative_path, blocksize);
+            printf("Server: Expected number of packets: %d\n", expected_packets);
+            while ((bytes_read = fread(buffer, 1, blocksize, file)) > 0 && packet_counter < expected_packets) {
                 if (sendto(child_sockfd, buffer, bytes_read, 0, (struct sockaddr *) &client_addr, len) < 0) {
                     perror("Server: Error sending file");
                     close(child_sockfd);
@@ -195,7 +197,8 @@ int main(int argc, char *argv[]) {
 
                 // Receive feedback from client
                 printf("Server: waiting for feedback\n");
-                if (recvfrom(child_sockfd, &buffer_state, sizeof(buffer_state), 0, (struct sockaddr *) &client_addr, &len) < 0) {
+                if (recvfrom(child_sockfd, &buffer_state, sizeof(buffer_state), 0, (struct sockaddr *) &client_addr,
+                             &len) < 0) {
                     perror("Server: Error receiving feedback");
                     close(child_sockfd);
                     fclose(file);
@@ -213,14 +216,14 @@ int main(int argc, char *argv[]) {
                 gettimeofday(&current_time, NULL);
                 // Calculate elapsed time in milliseconds
                 double elapsed_time = ((current_time.tv_sec - start_time.tv_sec) * 1000.0) +
-                        ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
+                                      ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
                 // Store lambda value
                 lambda_values[packet_counter] = lambda;
                 elapsed_times[packet_counter] = elapsed_time;
                 // --- Logging ---
 
                 // Calculate new packet interval
-                packet_interval = (int)(1000.0 / lambda);
+                packet_interval = (int) (1000.0 / lambda);
 
                 // Sleep for packet_interval milliseconds before next packet transmission
                 struct timespec ts;
@@ -244,13 +247,16 @@ int main(int argc, char *argv[]) {
                 perror("Error opening log file");
                 exit(EXIT_FAILURE);
             }
+            printf("Server: Logging lambda values to %s\n", logfileS);
 
             double normalized_time = 0.0;
             for (int i = 0; i < packet_counter; ++i) {
                 normalized_time = ((i == 0) ? 0.0 : elapsed_times[i]);
                 fprintf(log_file, "%.3f %f\n", normalized_time, lambda_values[i]);
             }
+            printf("Server: Logging complete\n");
 
+            printf("-----------------------------\n");
             fclose(log_file);
             close(child_sockfd);
             exit(0);

@@ -13,11 +13,13 @@
 #include "../lib/constants.h"
 #include "../lib/socket_utils.h"
 #include "../lib/congestion_control.h"
+#include "../lib/concurrency_utils.h"
 #include "../lib/queue.h"
 
 sem_t *buffer_sem;
 struct timeval start_time;
 
+// TODO: implement reading audio data from the buffer and writing it to the audio device
 int main(int argc, char *argv[]) {
     if (argc != C_ARG_COUNT) {
         fprintf(stderr, "Usage: %s <audiofile> <blocksize> <buffersize> <targetbuf> "
@@ -74,23 +76,8 @@ int main(int argc, char *argv[]) {
     }
     printf("Client: Sent blocksize\n");
 
-    // Buffer for receiving audio data
-    buffer_sem = sem_open("/buffer_sem", O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-    if (buffer_sem == SEM_FAILED) {
-        if (errno == EEXIST) {
-            buffer_sem = sem_open("/buffer_sem", 0);
-            sem_unlink("/buffer_sem");
-            buffer_sem = sem_open("/buffer_sem", O_CREAT | O_EXCL, S_IRUSR | S_IWUSR, 1);
-            if (buffer_sem == SEM_FAILED) {
-                perror("Client:sem_open: Error recreating semaphore\n");
-                exit(EXIT_FAILURE);
-            }
-        } else {
-            perror("Client:sem_open: Error creating semaphore\n");
-            exit(EXIT_FAILURE);
-        }
-    }
-    printf("Client: Semaphore created successfully\n");
+    // semaphore for receiving audio data
+    buffer_sem = create_semaphore("/buffer_sem");
 
 //    struct itimerval timer = {{0, 313000}, {0, 1}};
 //    setitimer(ITIMER_REAL, &timer, NULL);
