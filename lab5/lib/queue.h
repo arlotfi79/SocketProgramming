@@ -1,8 +1,10 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
+#include <stdlib.h>
+
 typedef struct {
-    int *array;
+    uint8_t *array;
     int front;
     int rear;
     int size;

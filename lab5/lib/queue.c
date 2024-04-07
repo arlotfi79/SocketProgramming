@@ -5,7 +5,7 @@
 
 Queue* createQueue(int capacity) {
     Queue* queue = (Queue*)malloc(sizeof(Queue));
-    queue->array = (int*)malloc(capacity * sizeof(int));
+    queue->array = (uint8_t *)malloc(capacity * sizeof(uint8_t));
     queue->capacity = capacity;
     queue->front = 0;
     queue->rear = -1;
@@ -47,7 +47,6 @@ void enqueue(Queue* queue, int item) {
     queue->rear = (queue->rear + 1) % queue->capacity;
     queue->array[queue->rear] = item;
     queue->size++;
-    printf("%d enqueued to queue.\n", item);
 }
 
 int dequeue(Queue* queue) {
