@@ -242,6 +242,17 @@ int main(int argc, char *argv[]) {
                 packet_counter++;
                 printf("-----------------------------\n");
             }
+            // Send 5 empty packets to signify end of session
+            printf("Server: Sending end of session packets (5 empty packets)\n");
+            for (int i = 0; i < 5; i++) {
+                if (sendto(child_sockfd, NULL, 0, 0, (struct sockaddr *) &client_addr, len) < 0) {
+                    perror("Server: Error sending end of session packet");
+                    close(child_sockfd);
+                    fclose(file);
+                    return -1;
+                }
+            }
+
             // ----- Handle streaming -----
 
             // Log lambda values
@@ -262,16 +273,6 @@ int main(int argc, char *argv[]) {
             }
             printf("Server: Logging complete\n");
 
-            // Send 5 empty packets to signify end of session
-            printf("Server: Sending end of session packets\n");
-            for (int i = 0; i < 5; i++) {
-                if (sendto(child_sockfd, NULL, 0, 0, (struct sockaddr *) &client_addr, len) < 0) {
-                    perror("Server: Error sending end of session packet");
-                    close(child_sockfd);
-                    fclose(file);
-                    return -1;
-                }
-            }
             fclose(log_file);
             close(child_sockfd);
             exit(0);
