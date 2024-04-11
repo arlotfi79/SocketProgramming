@@ -10,4 +10,8 @@
 #define FILENAME_LENGTH 20
 #define MAX_PACKETS 1000
 
+#define READ_SIZE 4096
+
+#define CONTROLLAW 0 // perform method D if 0, method C if it is 1
+
 #endif
