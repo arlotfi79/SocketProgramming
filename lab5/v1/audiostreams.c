@@ -25,9 +25,9 @@ int main(int argc, char *argv[]) {
     }
 
     double lambda = atoi(argv[1]);
-    const double epsilon = atoi(argv[2]);
-    const double gamma = atoi(argv[3]);
-    const double beta = atoi(argv[4]);
+    const double epsilon = atof(argv[2]);
+    const double gamma = atof(argv[3]);
+    const double beta = atof(argv[4]);
     const char *const logfileS = argv[5];
     const char *const ip = argv[6];
     const char *const initial_port = argv[7];
@@ -210,6 +210,7 @@ int main(int argc, char *argv[]) {
                 printf("Server: received feedback! buffer state value: %d\n", buffer_state);
 
                 // Adjust sending rate based on feedback
+                printf("eeepsilon %f\n", epsilon);
                 lambda = adjust_sending_rate(lambda, epsilon, gamma, beta, buffer_state);
                 printf("Server: adjusted lambda to %f\n", lambda);
 
@@ -222,7 +223,7 @@ int main(int argc, char *argv[]) {
                 gettimeofday(&current_time, NULL);
                 // Calculate elapsed time in milliseconds
                 double elapsed_time = ((current_time.tv_sec - start_time.tv_sec) * 1000.0) +
-                                      ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
+                        ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
                 // Store lambda value
                 elapsed_times[packet_counter] = elapsed_time;
                 lambda_values[packet_counter] = lambda;
@@ -257,7 +258,8 @@ int main(int argc, char *argv[]) {
 
             // ----- Handle streaming -----
 
-            // Log lambda values
+            // Log lambda values 
+            // TODO logfileS + i for ith client
             char logfile_fullname[100]; // Assuming the relative path is within 50 characters
             sprintf(logfile_fullname, "%s.csv", logfileS);
             FILE *log_file = fopen(logfile_fullname, "w");

@@ -7,9 +7,11 @@
 
 // Function to adjust the sending rate lambda based on feedback
 double adjust_sending_rate(double lambda, double epsilon, double gamma, double beta, unsigned short bufferstate) {
-    // Calculate adjustment based on method D
-    double adjustment = epsilon * (Q_STAR - bufferstate) + beta * (gamma - lambda);
-
+    // Calculate adjustment based on method D if CONTROLLAW is 0, on method C if it is 1
+    double adjustment = epsilon * (Q_STAR - bufferstate) + (1-CONTROLLAW) * beta * (gamma - lambda);
+    printf("epsilon is %f\n", epsilon);
+    printf("adjustment is %d\n", Q_STAR - bufferstate);
+    printf("epsilon times is %f\n", epsilon * (Q_STAR - bufferstate) );
     // Apply adjustment
     lambda += adjustment;
 
@@ -18,16 +20,15 @@ double adjust_sending_rate(double lambda, double epsilon, double gamma, double b
 
 // Function to calculate and send feedback packet
 int prepare_feedback(int Q_t, int targetbuf, int buffersize) {
-    int q;
+    float q;
     if (Q_t > targetbuf) {
-        q = ((Q_t - targetbuf) / (buffersize - targetbuf)) * 10 + 10;
+        q = ((float)(Q_t - targetbuf) / (buffersize - targetbuf)) * 10 + 10;
     } else if (Q_t < targetbuf) {
-        q = ((targetbuf - Q_t) / targetbuf) * 10;
+        q = 10 - (((float)(targetbuf - Q_t) / targetbuf) * 10);
     } else {
         q = 10;
     }
-
-    return q;
+    return (int) q;
 }
 
 // Function to get the size of the file

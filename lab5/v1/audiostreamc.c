@@ -8,6 +8,9 @@
 #include <sys/time.h>
 #include <semaphore.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <time.h>
 
 
 #include "../lib/constants.h"
@@ -17,8 +20,86 @@
 
 sem_t *buffer_sem;
 struct timeval start_time;
+// int buffer_occupancy = 0;
+int targetbuf;
+int sockfd, rv;
+struct addrinfo *server_info, *client_info;
+socklen_t len;
+int buffersize;
+Queue *buffer;
 
-// TODO -> Client: implement reading audio data from the buffer and writing it to the audio device
+
+
+// Signal handler function called to play the audio and empty buffer
+void buffer_read_handler(int sig) {
+    static uint8_t data[READ_SIZE];
+    sem_wait(buffer_sem);
+    if (buffer->size > READ_SIZE) {
+        size_t bytesRead = 0;
+        while (bytesRead < READ_SIZE) {
+            int item = dequeue(buffer);
+            if (item == -1) {
+                break;  // Queue is empty, stop reading
+            }
+            data[bytesRead++] = (uint8_t)item;  // Cast the int to uint8_t before storing
+            
+        }
+        // TODO add this function
+        // mulawwrite(data, READ_SIZE);
+        printf("Client: buffer read after 313 milliseconds\n");
+        // Send feedback packet after each read/write operation
+        unsigned short q = prepare_feedback(buffer->size, targetbuf, buffersize);
+        sem_post(buffer_sem);
+        if (sendto(sockfd, &q, sizeof(q), 0, server_info->ai_addr, len) == -1) {
+            perror("Client: Error sending feedback");
+            exit(-1);
+        }
+        printf("Client: Sent feedback after reading\n");
+    }else{
+       sem_post(buffer_sem); 
+    }
+
+
+}
+
+// Setup timer and signal handler for periodic execution
+void setup_periodic_timer() {
+    struct sigaction sa;
+    struct sigevent sev;
+    timer_t timerid;
+    struct itimerspec its;
+
+    // Set up signal handler
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sa.sa_handler = buffer_read_handler;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGRTMIN, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+
+    // Create the timer
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIGRTMIN;
+    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+        perror("timer_create");
+        exit(EXIT_FAILURE);
+    }
+
+    // Start the timer to fire every 313 milliseconds
+    its.it_value.tv_sec = 0;
+    its.it_value.tv_nsec = 313000000; // 313 milliseconds in nanoseconds
+    its.it_interval.tv_sec = its.it_value.tv_sec;
+    its.it_interval.tv_nsec = its.it_value.tv_nsec;
+
+    if (timer_settime(timerid, 0, &its, NULL) == -1) {
+        perror("timer_settime");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
+
 // Run -> ./audiostreamc.bin kj.au 4096 2899968 4096 127.0.0.1 5000 logFileC
 int main(int argc, char *argv[]) {
     if (argc != C_ARG_COUNT) {
@@ -29,16 +110,17 @@ int main(int argc, char *argv[]) {
 
     const char *audiofile = argv[1];
     int blocksize = atoi(argv[2]);
-    int buffersize = atoi(argv[3]);
-    int targetbuf = atoi(argv[4]);
+    buffersize = atoi(argv[3]);
+    targetbuf = atoi(argv[4]);
     const char *server_ip = argv[5];
     const char *server_port = argv[6];
     const char *logfileC = argv[7];
 
 
+
     // sockets prep
-    int sockfd, rv;
-    struct addrinfo *server_info, *client_info;
+    // int sockfd, rv;
+    // struct addrinfo *server_info, *client_info;
 
     // Building addresses
     if ((rv = build_address(NULL, "0", SOCK_DGRAM, &client_info) != 0)) {
@@ -79,26 +161,27 @@ int main(int argc, char *argv[]) {
     // semaphore for receiving audio data
     buffer_sem = create_semaphore("/buffer_sem");
 
-    // TODO -> Client: adding 313 msec signal to handle audio reading!
 //    struct itimerval timer = {{0, 313000}, {0, 1}};
 //    setitimer(ITIMER_REAL, &timer, NULL);
 //    gettimeofday(&start_time, NULL);
 
     // Loop for receiving audio data
-    Queue *buffer = createQueue(buffersize);
+    buffer = createQueue(buffersize);
     uint8_t block[blocksize];
-    socklen_t len = server_info->ai_addrlen;
+    // unsigned int len = sizeof(server_info);
+    len = server_info->ai_addrlen;
     int packet_counter = 0;
 
     // alarm for not receiving 1st response from the server
-    struct timeval timeout;
-    timeout.tv_sec = 2;  // after 2 seconds
-    timeout.tv_usec = 0;
+    // TODO is this necesary? handout does not mention this.
+    // struct timeval timeout;
+    // timeout.tv_sec = 2;  // after 2 seconds
+    // timeout.tv_usec = 0;
 
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-        perror("Error");
-        return -1;
-    }
+    // if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+    //     perror("Error");
+    //     return -1;
+    // }
 
     // Get the process ID
     pid_t pid = getpid();
@@ -116,6 +199,8 @@ int main(int argc, char *argv[]) {
 
     fprintf(log_file, "%s, %s\n", "time (ms)", "buffer_size");
 
+    setup_periodic_timer();
+
     while (1) {
         memset(block, 0, blocksize);
         int num_bytes_received = recvfrom(sockfd, block, blocksize, 0, server_info->ai_addr, &len);
@@ -124,8 +209,14 @@ int main(int argc, char *argv[]) {
                 printf("Timeout occurred\n");
                 return -1;
             } else {
-                perror("Client: Error receiving audio data");
-                return -1;
+                if (num_bytes_received == 0) {
+                    //TODO if number of bytes is zero 5 times connection should close and end
+                    printf("0 bytes recieved\n");
+                }else{
+                    perror("Client: Error receiving audio data");
+                    return -1;
+                }
+            
             }
         }
         printf("Client: Received packet #%d\n", packet_counter++);
@@ -139,12 +230,13 @@ int main(int argc, char *argv[]) {
 
         // Send feedback packet after each read/write operation
         unsigned short q = prepare_feedback(buffer->size, targetbuf, buffersize);
+        printf("Client: q in client is %d\n", q);
         if (sendto(sockfd, &q, sizeof(q), 0, server_info->ai_addr, len) == -1) {
             perror("Client: Error sending feedback");
             return -1;
         }
-        printf("Client: Sent feedback\n");
-
+        printf("Client: Sent feedback %d\n", q);
+        
         // Log the buffer size and normalized time
         struct timeval current_time;
         gettimeofday(&current_time, NULL);
