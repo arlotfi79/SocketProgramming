@@ -2,6 +2,8 @@
 #define CONCURRENCY_UTILS_H
 
 #include <semaphore.h>
+#include <fcntl.h>
+
 #include "queue.h"
 
 void handle_alarm(int sig);

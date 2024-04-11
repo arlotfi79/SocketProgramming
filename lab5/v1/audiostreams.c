@@ -14,30 +14,33 @@
 #include "../lib/constants.h"
 #include "../lib/congestion_control.h"
 
+
+// Run -> ./audiostreams.bin 1000 0.1 0.1 0.1  logFileS 127.0.0.1 5000
 int main(int argc, char *argv[]) {
 
-    if (argc < S_ARG_COUNT) {   // TODO try with different lambdas epsilons gammas betas
-        fprintf(stderr, "Usage: %s <lambda> <epsilon> <gamma> <beta> <logfileS> <server IPv4 address> <server-port>\n", argv[0]);
+    if (argc < S_ARG_COUNT) {
+        fprintf(stderr, "Usage: %s <lambda> <epsilon> <gamma> <beta> <logfileS> <server IPv4 address> <server-port>\n",
+                argv[0]);
         exit(EXIT_FAILURE);
     }
 
     double lambda = atoi(argv[1]);
-    const double epsilon = atoi(argv[2]);
-    const double gamma = atoi(argv[3]);
-    const double beta = atoi(argv[4]);
+    const double epsilon = atof(argv[2]);
+    const double gamma = atof(argv[3]);
+    const double beta = atof(argv[4]);
     const char *const logfileS = argv[5];
     const char *const ip = argv[6];
     const char *const initial_port = argv[7];
     char port[MAX_PORT_NUM];
 
     // Calculate initial packet_interval
-    int packet_interval = (int)(1000 / lambda);
+    int packet_interval = (int) (1000 / lambda);
 
     int rv, sockfd, attempts = 0;
     struct addrinfo *servinfo, *p;
     struct sockaddr_in client_addr;
-    bool success = false;
 
+    bool success = false;
     do {
         snprintf(port, sizeof(port), "%d", atoi(initial_port) + attempts); // Increment port number
 
@@ -94,6 +97,7 @@ int main(int argc, char *argv[]) {
 
     // Array to store lambda values
     double lambda_values[MAX_PACKETS];
+    double packet_intervals[MAX_PACKETS];
     double elapsed_times[MAX_PACKETS];
     struct timeval start_time, current_time;
     gettimeofday(&start_time, NULL); // Get start time
@@ -157,7 +161,7 @@ int main(int argc, char *argv[]) {
             // Get the socket address
             struct sockaddr_in sin;
             socklen_t sin_len = sizeof(sin);
-            if (getsockname(child_sockfd, (struct sockaddr *)&sin, &sin_len) == -1) {
+            if (getsockname(child_sockfd, (struct sockaddr *) &sin, &sin_len) == -1) {
                 perror("getsockname");
                 return -1;
             }
@@ -182,8 +186,9 @@ int main(int argc, char *argv[]) {
             size_t bytes_read;
 
             int packet_counter = 0;
-            while ((bytes_read = fread(buffer, 1, blocksize, file)) > 0) {
-                printf("bytes_read %ld\n", bytes_read);
+            int expected_packets = calculate_expected_number_of_packets(relative_path, blocksize);
+            printf("Server: Expected number of packets: %d\n", expected_packets);
+            while ((bytes_read = fread(buffer, 1, blocksize, file)) > 0 && packet_counter < expected_packets) {
                 if (sendto(child_sockfd, buffer, bytes_read, 0, (struct sockaddr *) &client_addr, len) < 0) {
                     perror("Server: Error sending file");
                     close(child_sockfd);
@@ -195,7 +200,8 @@ int main(int argc, char *argv[]) {
 
                 // Receive feedback from client
                 printf("Server: waiting for feedback\n");
-                if (recvfrom(child_sockfd, &buffer_state, sizeof(buffer_state), 0, (struct sockaddr *) &client_addr, &len) < 0) {
+                if (recvfrom(child_sockfd, &buffer_state, sizeof(buffer_state), 0, (struct sockaddr *) &client_addr,
+                             &len) < 0) {
                     perror("Server: Error receiving feedback");
                     close(child_sockfd);
                     fclose(file);
@@ -204,9 +210,13 @@ int main(int argc, char *argv[]) {
                 printf("Server: received feedback! buffer state value: %d\n", buffer_state);
 
                 // Adjust sending rate based on feedback
+                printf("eeepsilon %f\n", epsilon);
                 lambda = adjust_sending_rate(lambda, epsilon, gamma, beta, buffer_state);
                 printf("Server: adjusted lambda to %f\n", lambda);
 
+
+                // Calculate new packet interval
+                packet_interval = (int) (1000.0 / lambda);
 
                 // --- Logging ---
                 // Get current time
@@ -215,12 +225,11 @@ int main(int argc, char *argv[]) {
                 double elapsed_time = ((current_time.tv_sec - start_time.tv_sec) * 1000.0) +
                         ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
                 // Store lambda value
-                lambda_values[packet_counter] = lambda;
                 elapsed_times[packet_counter] = elapsed_time;
+                lambda_values[packet_counter] = lambda;
+                packet_intervals[packet_counter] = packet_interval;
                 // --- Logging ---
 
-                // Calculate new packet interval
-                packet_interval = (int)(1000.0 / lambda);
 
                 // Sleep for packet_interval milliseconds before next packet transmission
                 struct timespec ts;
@@ -234,25 +243,39 @@ int main(int argc, char *argv[]) {
                     return -1;
                 }
                 packet_counter++;
+                printf("-----------------------------\n");
             }
-            // ----- Handle streaming -----
+            // Send 5 empty packets to signify end of session
+            printf("Server: Sending end of session packets (5 empty packets)\n");
+            for (int i = 0; i < 5; i++) {
+                if (sendto(child_sockfd, NULL, 0, 0, (struct sockaddr *) &client_addr, len) < 0) {
+                    perror("Server: Error sending end of session packet");
+                    close(child_sockfd);
+                    fclose(file);
+                    return -1;
+                }
+            }
 
-            /* TODO audiostreams transmits 5 UDP packets containing 
-                    no payload signifying that the session has ended*/
+            // ----- Handle streaming -----
 
             // Log lambda values 
             // TODO logfileS + i for ith client
-            FILE *log_file = fopen(logfileS, "w");
+            char logfile_fullname[100]; // Assuming the relative path is within 50 characters
+            sprintf(logfile_fullname, "%s.csv", logfileS);
+            FILE *log_file = fopen(logfile_fullname, "w");
             if (log_file == NULL) {
                 perror("Error opening log file");
                 exit(EXIT_FAILURE);
             }
+            printf("Server: Logging lambda values to %s\n", logfileS);
 
             double normalized_time = 0.0;
+            fprintf(log_file, "%s, %s, %s\n", "time", "lambda", "packet_interval");
             for (int i = 0; i < packet_counter; ++i) {
                 normalized_time = ((i == 0) ? 0.0 : elapsed_times[i]);
-                fprintf(log_file, "%.3f %f\n", normalized_time, lambda_values[i]);
+                fprintf(log_file, "%.3f, %.3f, %.3f\n", normalized_time, lambda_values[i], packet_intervals[i]);
             }
+            printf("Server: Logging complete\n");
 
             fclose(log_file);
             close(child_sockfd);

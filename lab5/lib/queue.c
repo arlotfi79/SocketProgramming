@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "queue.h"
 
 
@@ -47,6 +48,7 @@ void enqueue(Queue* queue, int item) {
     queue->rear = (queue->rear + 1) % queue->capacity;
     queue->array[queue->rear] = item;
     queue->size++;
+    // printf("%d enqueued to queue.\n", item);
 }
 
 int dequeue(Queue* queue) {
