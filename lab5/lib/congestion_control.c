@@ -20,6 +20,7 @@ double adjust_sending_rate(double lambda, double epsilon, double gamma, double b
 
 // Function to calculate and send feedback packet
 int prepare_feedback(int Q_t, int targetbuf, int buffersize) {
+    printf("Q_t %d, targetbuf %d, buffersize %d\n", Q_t, targetbuf, buffersize);
     float q;
     if (Q_t > targetbuf) {
         q = ((float)(Q_t - targetbuf) / (buffersize - targetbuf)) * 10 + 10;
