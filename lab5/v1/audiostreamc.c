@@ -12,11 +12,47 @@
 #include <signal.h>
 #include <time.h>
 
-
 #include "../lib/constants.h"
 #include "../lib/socket_utils.h"
 #include "../lib/congestion_control.h"
 #include "../lib/concurrency_utils.h"
+
+
+// -----------------------------
+#include <alsa/asoundlib.h>
+/* audio codec library functions */
+
+static snd_pcm_t *mulawdev;
+static snd_pcm_uframes_t mulawfrms;
+
+// Initialize audio device.
+void mulawopen(size_t *bufsiz) {
+	snd_pcm_hw_params_t *p;
+	unsigned int rate = 8000;
+
+	snd_pcm_open(&mulawdev, "default", SND_PCM_STREAM_PLAYBACK, 0);
+	snd_pcm_hw_params_alloca(&p);
+	snd_pcm_hw_params_any(mulawdev, p);
+	snd_pcm_hw_params_set_access(mulawdev, p, SND_PCM_ACCESS_RW_INTERLEAVED);
+	snd_pcm_hw_params_set_format(mulawdev, p, SND_PCM_FORMAT_MU_LAW);
+	snd_pcm_hw_params_set_channels(mulawdev, p, 1);
+	snd_pcm_hw_params_set_rate_near(mulawdev, p, &rate, 0);
+	snd_pcm_hw_params(mulawdev, p);
+	snd_pcm_hw_params_get_period_size(p, &mulawfrms, 0);
+	*bufsiz = (size_t)mulawfrms;
+	return;
+}
+
+// Write to audio device.
+#define mulawwrite(x) snd_pcm_writei(mulawdev, x, mulawfrms)
+
+// Close audio device.
+void mulawclose(void) {
+	snd_pcm_drain(mulawdev);
+	snd_pcm_close(mulawdev);
+}
+
+// -----------------------------
 
 sem_t *buffer_sem;
 struct timeval start_time;
@@ -45,16 +81,17 @@ void buffer_read_handler(int sig) {
             
         }
         // TODO add this function
-        // mulawwrite(data, READ_SIZE);
+        // printf("mulaw\n");
+        mulawwrite(data);
         printf("Client: buffer read after 313 milliseconds\n");
         // Send feedback packet after each read/write operation
-        unsigned short q = prepare_feedback(buffer->size, targetbuf, buffersize);
+        // unsigned short q = prepare_feedback(buffer->size, targetbuf, buffersize);
         sem_post(buffer_sem);
-        if (sendto(sockfd, &q, sizeof(q), 0, server_info->ai_addr, len) == -1) {
-            perror("Client: Error sending feedback");
-            exit(-1);
-        }
-        printf("Client: Sent feedback after reading\n");
+        // if (sendto(sockfd, &q, sizeof(q), 0, server_info->ai_addr, len) == -1) {
+        //     perror("Client: Error sending feedback");
+        //     exit(-1);
+        // }
+        // printf("Client: Sent feedback after reading\n");
     }else{
        sem_post(buffer_sem); 
     }
@@ -100,7 +137,7 @@ void setup_periodic_timer() {
 
 
 
-// Run -> ./audiostreamc.bin kj.au 4096 2899968 4096 127.0.0.1 5000 logFileC
+// Run -> ./audiostreamc.bin kj.au 4096 65536 32768 127.0.0.1 5000 logFileC
 int main(int argc, char *argv[]) {
     if (argc != C_ARG_COUNT) {
         fprintf(stderr, "Usage: %s <audiofile> <blocksize> <buffersize> <targetbuf> "
@@ -173,7 +210,7 @@ int main(int argc, char *argv[]) {
     int packet_counter = 0;
 
     // alarm for not receiving 1st response from the server
-    // TODO is this necesary? handout does not mention this.
+    // TODO add 2 second timeout
     // struct timeval timeout;
     // timeout.tv_sec = 2;  // after 2 seconds
     // timeout.tv_usec = 0;
@@ -200,7 +237,10 @@ int main(int argc, char *argv[]) {
     fprintf(log_file, "%s, %s\n", "time (ms)", "buffer_size");
 
     setup_periodic_timer();
+    size_t bufsiz;
+    mulawopen(&bufsiz);	
 
+    int empty_packets_recieved = 0;
     while (1) {
         memset(block, 0, blocksize);
         int num_bytes_received = recvfrom(sockfd, block, blocksize, 0, server_info->ai_addr, &len);
@@ -210,7 +250,11 @@ int main(int argc, char *argv[]) {
                 return -1;
             } else {
                 if (num_bytes_received == 0) {
-                    //TODO if number of bytes is zero 5 times connection should close and end
+                    empty_packets_recieved ++;
+                    if (empty_packets_recieved == 5){
+                        printf("Client: five empty packets recieved, ending transmission\n");
+                        break;
+                    }
                     printf("0 bytes recieved\n");
                 }else{
                     perror("Client: Error receiving audio data");
@@ -243,6 +287,7 @@ int main(int argc, char *argv[]) {
         double normalized_time = (current_time.tv_sec - start_time.tv_sec) * 1000.0 + (current_time.tv_usec - start_time.tv_usec) / 1000.0;
 
         fprintf(log_file, "%.3f, %d\n", normalized_time, buffer->size);
+        printf("-----------------------------\n");
     }
 
 
@@ -254,3 +299,4 @@ int main(int argc, char *argv[]) {
     destroyQueue(buffer);
 
 }
+

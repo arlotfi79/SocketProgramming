@@ -102,6 +102,7 @@ int main(int argc, char *argv[]) {
     struct timeval start_time, current_time;
     gettimeofday(&start_time, NULL); // Get start time
 
+    int child_number = 0;
     while (1) {
         unsigned int len = sizeof(client_addr);
         char filename[FILENAME_LENGTH + 1];
@@ -133,6 +134,7 @@ int main(int argc, char *argv[]) {
         printf("Server: filename is valid\n");
 
         // Fork a child process to handle streaming
+        child_number ++;
         pid_t pid = fork();
         if (pid == 0) {
             // Child process
@@ -259,9 +261,8 @@ int main(int argc, char *argv[]) {
             // ----- Handle streaming -----
 
             // Log lambda values 
-            // TODO logfileS + i for ith client
             char logfile_fullname[100]; // Assuming the relative path is within 50 characters
-            sprintf(logfile_fullname, "%s.csv", logfileS);
+            sprintf(logfile_fullname, "%s-%d.csv", logfileS, child_number);
             FILE *log_file = fopen(logfile_fullname, "w");
             if (log_file == NULL) {
                 perror("Error opening log file");
@@ -281,6 +282,7 @@ int main(int argc, char *argv[]) {
             close(child_sockfd);
             exit(0);
         } else if (pid < 0) {
+            child_number --;
             perror("Error forking");
             continue;
         }
