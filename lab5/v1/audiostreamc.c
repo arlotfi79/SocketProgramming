@@ -256,7 +256,6 @@ int main(int argc, char *argv[]) {
         }
         printf("Client: Received packet #%d\n", packet_counter++);
 
-        // TODO: fix buffer overflow that occurs here (I assume bec of buffer size as we are supposed to play the audio file in real time)
         int result = handle_received_data(buffer, block, num_bytes_received, buffer_sem, buffersize);
         if (result == -1) {
             perror("Client: Error handling received data (semaphore error)");
