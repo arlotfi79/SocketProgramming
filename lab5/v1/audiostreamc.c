@@ -27,20 +27,20 @@ static snd_pcm_uframes_t mulawfrms;
 
 // Initialize audio device.
 void mulawopen(size_t *bufsiz) {
-	snd_pcm_hw_params_t *p;
-	unsigned int rate = 8000;
+    snd_pcm_hw_params_t *p;
+    unsigned int rate = 8000;
 
-	snd_pcm_open(&mulawdev, "default", SND_PCM_STREAM_PLAYBACK, 0);
-	snd_pcm_hw_params_alloca(&p);
-	snd_pcm_hw_params_any(mulawdev, p);
-	snd_pcm_hw_params_set_access(mulawdev, p, SND_PCM_ACCESS_RW_INTERLEAVED);
-	snd_pcm_hw_params_set_format(mulawdev, p, SND_PCM_FORMAT_MU_LAW);
-	snd_pcm_hw_params_set_channels(mulawdev, p, 1);
-	snd_pcm_hw_params_set_rate_near(mulawdev, p, &rate, 0);
-	snd_pcm_hw_params(mulawdev, p);
-	snd_pcm_hw_params_get_period_size(p, &mulawfrms, 0);
-	*bufsiz = (size_t)mulawfrms;
-	return;
+    snd_pcm_open(&mulawdev, "default", SND_PCM_STREAM_PLAYBACK, 0);
+    snd_pcm_hw_params_alloca(&p);
+    snd_pcm_hw_params_any(mulawdev, p);
+    snd_pcm_hw_params_set_access(mulawdev, p, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(mulawdev, p, SND_PCM_FORMAT_MU_LAW);
+    snd_pcm_hw_params_set_channels(mulawdev, p, 1);
+    snd_pcm_hw_params_set_rate_near(mulawdev, p, &rate, 0);
+    snd_pcm_hw_params(mulawdev, p);
+    snd_pcm_hw_params_get_period_size(p, &mulawfrms, 0);
+    *bufsiz = (size_t)mulawfrms;
+    return;
 }
 
 // Write to audio device.
@@ -48,8 +48,8 @@ void mulawopen(size_t *bufsiz) {
 
 // Close audio device.
 void mulawclose(void) {
-	snd_pcm_drain(mulawdev);
-	snd_pcm_close(mulawdev);
+    snd_pcm_drain(mulawdev);
+    snd_pcm_close(mulawdev);
 }
 
 // -----------------------------
@@ -89,13 +89,13 @@ void buffer_read_handler(int sig) {
                 break;  // Queue is empty, stop reading
             }
             data[bytesRead++] = (uint8_t)item;  // Cast the int to uint8_t before storing
-            
+
         }
         mulawwrite(data);
         printf("Client: buffer read after 313 milliseconds\n");
         sem_post(buffer_sem);
     }else{
-       sem_post(buffer_sem); 
+        sem_post(buffer_sem);
     }
 
 
@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
 
     setup_periodic_timer();
     size_t bufsiz;
-    mulawopen(&bufsiz);	
+    mulawopen(&bufsiz);
 
     int empty_packets_recieved = 0;
     while (1) {
@@ -251,12 +251,11 @@ int main(int argc, char *argv[]) {
                     perror("Client: Error receiving audio data");
                     return -1;
                 }
-            
+
             }
         }
         printf("Client: Received packet #%d\n", packet_counter++);
 
-        // TODO: fix buffer overflow that occurs here (I assume bec of buffer size as we are supposed to play the audio file in real time)
         int result = handle_received_data(buffer, block, num_bytes_received, buffer_sem, buffersize);
         if (result == -1) {
             perror("Client: Error handling received data (semaphore error)");
@@ -271,7 +270,7 @@ int main(int argc, char *argv[]) {
             return -1;
         }
         printf("Client: Sent feedback %d\n", q);
-        
+
         // Log the buffer size and normalized time
         struct timeval current_time;
         gettimeofday(&current_time, NULL);

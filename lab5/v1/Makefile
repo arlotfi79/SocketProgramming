@@ -1,6 +1,6 @@
 all: audiostreams audiostreamc
 
-audiostreamc: audiostreamc.o socket_utils.o congestion_control.o queue.o concurrency_utils.o audio_utils.o ../lib/constants.h
+audiostreamc: audiostreamc.o socket_utils.o congestion_control.o queue.o concurrency_utils.o ../lib/constants.h
 	@echo "Linking files and creating the client executable"
 	gcc audiostreamc.o congestion_control.o socket_utils.o queue.o concurrency_utils.o -o audiostreamc.bin -lasound
 
