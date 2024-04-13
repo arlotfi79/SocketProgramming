@@ -94,6 +94,7 @@ int main(int argc, char *argv[]) {
 
     // Main loop
     unsigned short buffer_state;
+    // int buffer_state;
 
     // Array to store lambda values
     double lambda_values[MAX_PACKETS];
