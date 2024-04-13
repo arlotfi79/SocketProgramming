@@ -94,6 +94,7 @@ int main(int argc, char *argv[]) {
 
     // Main loop
     unsigned short buffer_state;
+    // int buffer_state;
 
     // Array to store lambda values
     double lambda_values[MAX_PACKETS];
@@ -225,7 +226,7 @@ int main(int argc, char *argv[]) {
                 gettimeofday(&current_time, NULL);
                 // Calculate elapsed time in milliseconds
                 double elapsed_time = ((current_time.tv_sec - start_time.tv_sec) * 1000.0) +
-                        ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
+                                      ((current_time.tv_usec - start_time.tv_usec) / 1000.0);
                 // Store lambda value
                 elapsed_times[packet_counter] = elapsed_time;
                 lambda_values[packet_counter] = lambda;

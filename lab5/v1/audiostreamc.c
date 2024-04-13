@@ -27,20 +27,20 @@ static snd_pcm_uframes_t mulawfrms;
 
 // Initialize audio device.
 void mulawopen(size_t *bufsiz) {
-	snd_pcm_hw_params_t *p;
-	unsigned int rate = 8000;
+    snd_pcm_hw_params_t *p;
+    unsigned int rate = 8000;
 
-	snd_pcm_open(&mulawdev, "default", SND_PCM_STREAM_PLAYBACK, 0);
-	snd_pcm_hw_params_alloca(&p);
-	snd_pcm_hw_params_any(mulawdev, p);
-	snd_pcm_hw_params_set_access(mulawdev, p, SND_PCM_ACCESS_RW_INTERLEAVED);
-	snd_pcm_hw_params_set_format(mulawdev, p, SND_PCM_FORMAT_MU_LAW);
-	snd_pcm_hw_params_set_channels(mulawdev, p, 1);
-	snd_pcm_hw_params_set_rate_near(mulawdev, p, &rate, 0);
-	snd_pcm_hw_params(mulawdev, p);
-	snd_pcm_hw_params_get_period_size(p, &mulawfrms, 0);
-	*bufsiz = (size_t)mulawfrms;
-	return;
+    snd_pcm_open(&mulawdev, "default", SND_PCM_STREAM_PLAYBACK, 0);
+    snd_pcm_hw_params_alloca(&p);
+    snd_pcm_hw_params_any(mulawdev, p);
+    snd_pcm_hw_params_set_access(mulawdev, p, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(mulawdev, p, SND_PCM_FORMAT_MU_LAW);
+    snd_pcm_hw_params_set_channels(mulawdev, p, 1);
+    snd_pcm_hw_params_set_rate_near(mulawdev, p, &rate, 0);
+    snd_pcm_hw_params(mulawdev, p);
+    snd_pcm_hw_params_get_period_size(p, &mulawfrms, 0);
+    *bufsiz = (size_t)mulawfrms;
+    return;
 }
 
 // Write to audio device.
@@ -48,8 +48,8 @@ void mulawopen(size_t *bufsiz) {
 
 // Close audio device.
 void mulawclose(void) {
-	snd_pcm_drain(mulawdev);
-	snd_pcm_close(mulawdev);
+    snd_pcm_drain(mulawdev);
+    snd_pcm_close(mulawdev);
 }
 
 // -----------------------------
@@ -63,6 +63,17 @@ struct addrinfo *server_info, *client_info;
 socklen_t len;
 int buffersize;
 Queue *buffer;
+volatile int initial_recieved;
+
+void two_alarm_handler(int sig) {
+    if (initial_recieved == 0) {
+        printf("No packet recieved for 2 seconds.\n");
+        printf("Exiting program.\n");
+        exit(0);
+    } else {
+        printf("Packet recieved in 2 seconds, not exiting program\n");
+    }
+}
 
 
 
@@ -78,22 +89,13 @@ void buffer_read_handler(int sig) {
                 break;  // Queue is empty, stop reading
             }
             data[bytesRead++] = (uint8_t)item;  // Cast the int to uint8_t before storing
-            
+
         }
-        // TODO add this function
-        // printf("mulaw\n");
         mulawwrite(data);
         printf("Client: buffer read after 313 milliseconds\n");
-        // Send feedback packet after each read/write operation
-        // unsigned short q = prepare_feedback(buffer->size, targetbuf, buffersize);
         sem_post(buffer_sem);
-        // if (sendto(sockfd, &q, sizeof(q), 0, server_info->ai_addr, len) == -1) {
-        //     perror("Client: Error sending feedback");
-        //     exit(-1);
-        // }
-        // printf("Client: Sent feedback after reading\n");
     }else{
-       sem_post(buffer_sem); 
+        sem_post(buffer_sem);
     }
 
 
@@ -154,11 +156,6 @@ int main(int argc, char *argv[]) {
     const char *logfileC = argv[7];
 
 
-
-    // sockets prep
-    // int sockfd, rv;
-    // struct addrinfo *server_info, *client_info;
-
     // Building addresses
     if ((rv = build_address(NULL, "0", SOCK_DGRAM, &client_info) != 0)) {
         fprintf(stderr, "Client: getaddrinfo client: %s\n", gai_strerror(rv));
@@ -198,10 +195,6 @@ int main(int argc, char *argv[]) {
     // semaphore for receiving audio data
     buffer_sem = create_semaphore("/buffer_sem");
 
-//    struct itimerval timer = {{0, 313000}, {0, 1}};
-//    setitimer(ITIMER_REAL, &timer, NULL);
-//    gettimeofday(&start_time, NULL);
-
     // Loop for receiving audio data
     buffer = createQueue(buffersize);
     uint8_t block[blocksize];
@@ -210,17 +203,13 @@ int main(int argc, char *argv[]) {
     int packet_counter = 0;
 
     // alarm for not receiving 1st response from the server
-    // TODO add 2 second timeout
-    // struct timeval timeout;
-    // timeout.tv_sec = 2;  // after 2 seconds
-    // timeout.tv_usec = 0;
+    initial_recieved = 0;
+    signal(SIGALRM, two_alarm_handler);
+    // Set alarm to go off after 2 seconds
+    alarm(2);
 
-    // if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-    //     perror("Error");
-    //     return -1;
-    // }
 
-    // Get the process ID
+    // Get the process IDinitial_recieved
     pid_t pid = getpid();
 
     // Create the log file name
@@ -238,12 +227,14 @@ int main(int argc, char *argv[]) {
 
     setup_periodic_timer();
     size_t bufsiz;
-    mulawopen(&bufsiz);	
+    mulawopen(&bufsiz);
 
     int empty_packets_recieved = 0;
     while (1) {
         memset(block, 0, blocksize);
         int num_bytes_received = recvfrom(sockfd, block, blocksize, 0, server_info->ai_addr, &len);
+        alarm(0);
+        initial_recieved = 1;
         if (num_bytes_received <= 0) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 printf("Timeout occurred\n");
@@ -260,7 +251,7 @@ int main(int argc, char *argv[]) {
                     perror("Client: Error receiving audio data");
                     return -1;
                 }
-            
+
             }
         }
         printf("Client: Received packet #%d\n", packet_counter++);
@@ -280,7 +271,7 @@ int main(int argc, char *argv[]) {
             return -1;
         }
         printf("Client: Sent feedback %d\n", q);
-        
+
         // Log the buffer size and normalized time
         struct timeval current_time;
         gettimeofday(&current_time, NULL);

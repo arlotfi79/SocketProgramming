@@ -9,9 +9,6 @@
 double adjust_sending_rate(double lambda, double epsilon, double gamma, double beta, unsigned short bufferstate) {
     // Calculate adjustment based on method D if CONTROLLAW is 0, on method C if it is 1
     double adjustment = epsilon * (Q_STAR - bufferstate) + (1-CONTROLLAW) * beta * (gamma - lambda);
-    printf("epsilon is %f\n", epsilon);
-    printf("adjustment is %d\n", Q_STAR - bufferstate);
-    printf("epsilon times is %f\n", epsilon * (Q_STAR - bufferstate) );
     // Apply adjustment
     lambda += adjustment;
 
